@@ -1,0 +1,6 @@
+addr 127.0.0.1
+port 8000
+
+#max_con 128
+workers 1
+#poll_timeout 10000
