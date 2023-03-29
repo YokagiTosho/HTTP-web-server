@@ -222,10 +222,12 @@ static int run_static(int fd, const request_t *request, const char *fs_path)
 		return SUS_ERROR;
 	}
 
+#if 1
 	if (response_from_fd(static_file_fd, &response) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed \"response_from_fd()\"");
 		return SUS_ERROR;
 	}
+#endif
 
 	/* send here response */
 	if (send_response(fd, &response) == SUS_ERROR) {
