@@ -20,11 +20,11 @@ static void handle_signal(int sig)
 	}
 }
 
-static void bridge_run(int main_fd);
+static void bridge_run(int main_fd, void *data);
 
 int init_bridge(process_t *proc)
 {
-	*proc = create_process(bridge_run);
+	*proc = create_process(bridge_run, NULL);
 	if (proc->pid == INVALID_PID) {
 		return SUS_ERROR;
 	}
@@ -100,7 +100,7 @@ static int fdacchndl(int fd)
  * and send them to workers, with a little bit of communication for sync. 
  * That's it, no more - no less. 
  */
-static void bridge_run(int main_fd)
+static void bridge_run(int main_fd, void *data)
 {
 	signal(SIGINT, handle_signal);
 

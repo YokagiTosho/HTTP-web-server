@@ -42,6 +42,12 @@
 
 #define DEBUG // for printf
 
+#define MLC_CPY(dest, src) \
+	do { \
+		dest = malloc(strlen(src)+1); \
+		strcpy(dest, src); \
+	} while (0)
+
 #define CLOSE_INOUT_FD() \
 	do { \
 		close(STDIN_FILENO); \

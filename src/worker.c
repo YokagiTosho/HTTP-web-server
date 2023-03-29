@@ -74,7 +74,7 @@ static int process_bridge_data(int fd)
 {
 	int rc;
 	channel_t ch;
-	response_t response;
+	//response_t response;
 
 	rc = recv_fd(fd, &ch, sizeof(channel_t));
 	if (rc == SUS_ERROR) {
@@ -112,78 +112,6 @@ static int read_clientfd(int fd, char *buf, int size)
 	return rc;
 }
 
-#define CALLBACK_CYCLE_CONS
-
-#ifndef CALLBACK_CYCLE_CONS
-static void cycle_cons()
-{
-	int n, i, rc, ret, client_disconnected;
-	char buf[REQUEST_BUFSIZE];
-	request_t request;
-
-	n = nfds;
-	client_disconnected = 0;
-	for (i = LISTEN_FD+1; i < n; i++) {
-		if (fds[i].revents & POLLIN) {
-			/* NOTE can read fd and handle it */
-			rc = read_clientfd(fds[i].fd, buf, WORKER_BUFSIZE);
-			switch (rc) {
-				case SUS_ERROR:
-					sus_log_error(LEVEL_PANIC, "Failed to read fd %d: %s", fds[i].fd, strerror(errno));
-					break;
-				case SUS_DISCONNECTED:
-#ifdef DEBUG
-					printf("%d disconnected\n", fds[i].fd);
-#endif
-					if (query_disconnect(&fds[i].fd) == SUS_ERROR) {
-						sus_log_error(LEVEL_PANIC, "Failed \"query_disconnect()\"");
-						continue;
-					}
-					client_disconnected = 1;
-					break;
-				default:
-					memset(&request, 0, sizeof(request_t));
-					ret = parse_request(buf, &request);
-					if (ret == SUS_ERROR) {
-						sus_log_error(LEVEL_PANIC, "Failed \"parse_request()\"");
-						continue;
-					}
-					dump_request(&request); // dumps request to screen with DEBUG
-					log_access(&request, rc); // dumps request to access.log without DEBUG
-#if 0
-					char test_answer[] = 
-						"HTTP/1.1 200 OK\r\n"
-						"Content-Type: text/html\r\n"
-						"Connection: keep-alive\r\n"
-						"Content-Length: 29\r\n"
-						"\r\n"
-						"<h1>Test msg from server</h1>";
-					if (write(fds[i].fd, test_answer, sizeof(test_answer)-1) != sizeof(test_answer)-1) {
-						sus_log_error(LEVEL_WARNING, "write != sizeof(test_answer): %s", strerror(errno));
-					}
-#endif
-					/* TODO Prepare response
-					 * and send it back to the user */
-					fre_req(&request);
-					break;
-			}
-		}
-		else if (fds[i].revents & POLLERR) {
-			sus_log_error(LEVEL_PANIC, "Socket %d received POLLERR", fds[i].fd);
-			if (query_disconnect(&fds[i].fd) == SUS_ERROR) {
-				sus_log_error(LEVEL_PANIC, "Failed \"query_disconnect()\"");
-			}
-		}
-	}
-
-	if (client_disconnected) {
-		client_disconnected = 0;
-		align_fds();
-	}
-}
-
-#else
-
 /* NOTE with callbacks */
 static int error_callback(int fd)
 {
@@ -198,29 +126,165 @@ static int file_exists(const char *filepath)
 
 static int create_fspath(char *fs_path, const request_t *request)
 {
-	int i, j, args_st;
+	int i, args_st;
 	char *p;
 
-	strcpy(fs_path, "./examples/"); // TODO change this to config variable, HARDCODED for test
+	strcpy(fs_path, "examples/"); // TODO change this to config variable, HARDCODED for test
 	if (request->args) {
 		p = strchr(request->uri, '?');
 		if (!p) { 
 			/* should not ever happen */
 			return SUS_ERROR;
 		}
+		int fs_pathend = strlen(fs_path)+1;
 		args_st = (int)(p - request->uri);
-		for (i = 0, j = strlen(fs_path)+1; i < args_st; i++, j++) {
-			fs_path[j] = request->uri[i];
+		for (i = 0; i < args_st; i++) {
+			fs_path[i+fs_pathend] = request->uri[i];
 		}
-		fs_path[j] = '\0';
+		fs_path[i+fs_pathend] = '\0';
 	} else {
 		strcat(fs_path, request->uri);
 	}
 
 	if (request->dir && !request->cgi) {
-		strcat(fs_path, "index.html");
+		strcat(fs_path, "index.html"); // TODO take from configuration as well
 	} else if (request->dir && request->cgi){
-		strcat(fs_path, "index.cgi");
+		strcat(fs_path, "index.cgi"); // TODO take from configuration as well
+	}
+
+	return SUS_OK;
+}
+
+static int run_cgi(int fd, const request_t *request, const char *fs_path)
+{
+	/* Runs CGI script, parses its output, makes response and sends it to fd */
+	process_t cgi_process;
+	response_t response;
+	struct cgi_data data;
+
+	/* TODO prepare ENV from *request */
+
+	memset(&response, 0, sizeof(response_t));
+
+	cgi_process.pid = INVALID_PID;
+	cgi_process.channel[0] = INVALID_SOCKET;
+	cgi_process.channel[1] = INVALID_SOCKET;
+
+	data.fs_path = fs_path;
+
+	// TODO prepare ENV for cgi, call cgi, grab its output and send response
+	cgi_process = create_process(execute_cgi, &data);
+	if (cgi_process.pid == INVALID_PID) {
+		sus_log_error(LEVEL_PANIC, "Failed \"create_process()\"");
+		return SUS_ERROR;
+	}
+
+	if (wait_process(&cgi_process) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed \"wait_process()\"");
+		return SUS_ERROR;
+	}
+
+	if (response_from_fd(cgi_process.channel[0], &response) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed \"response_from_fd()\"");
+		return SUS_ERROR;
+	}
+
+	/* send here response */
+	if (send_response(fd, &response) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed \"send_response()\"");
+		return SUS_ERROR;
+	}
+
+	if (close(cgi_process.channel[0]) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
+	}
+
+	fre_res(&response);
+	return SUS_OK;
+}
+
+static int run_static(int fd, const request_t *request, const char *fs_path)
+{
+	/* Loads static file, makes response and sends it to fd 
+	 * Also static files should be cached if file is hot. 
+	 * Look for Transfer-Encoding: chunked for big files */
+	int static_file_fd;
+	response_t response;
+
+	memset(&response, 0, sizeof(response_t));
+	response.content_type = get_content_type(fs_path); 
+
+	set_default_headers(&response);
+
+	static_file_fd = open(fs_path, O_RDONLY);
+	if (static_file_fd == -1) {
+		sus_log_error(LEVEL_PANIC, "Failed \"open()\" %s: %s", fs_path, strerror(errno));
+		return SUS_ERROR;
+	}
+
+	if (response_from_fd(static_file_fd, &response) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed \"response_from_fd()\"");
+		return SUS_ERROR;
+	}
+
+	/* send here response */
+	if (send_response(fd, &response) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed \"send_response()\"");
+		return SUS_ERROR;
+	}
+
+	if (close(static_file_fd) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
+	}
+
+	fre_res(&response);
+
+	return SUS_OK;
+}
+
+static int kgo_response(int fd, const request_t *request)
+{
+#define LINUX_MAX_PATHLEN 4096
+	char fs_path[LINUX_MAX_PATHLEN];
+	memset(fs_path, 0, LINUX_MAX_PATHLEN);
+
+	if (create_fspath(fs_path, request) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed \"create_fspath()\"");
+		return SUS_ERROR;
+	}
+
+#ifdef DEBUG
+	printf("fs_path: %s\n", fs_path);
+#endif
+
+	if (!file_exists(fs_path)) {
+		char not_found_msg[] = 
+			"HTTP/1.1 404 Not Found\r\n"
+			"Content-Type: text/html\r\n"
+			"Connection: keep-alive\r\n"
+			"Content-Length: 182\r\n"
+			"\r\n"
+			"<html>"
+			"<head><title>404 Not Found</title></head>"
+			"<body>"
+			"<h1>Not Found</h1></body>"
+			"<p>The requested URL was not found on this server</p>"
+			"<hr>"
+			"<p>Simple Unattractive Server</p>"
+			"</body>"
+			"</html>";
+		send_hardcoded_msg(fd, not_found_msg, sizeof(not_found_msg)-1);
+		return SUS_OK;
+	}
+
+	/* TODO here some checks, if only headers must be send, etc. */
+	/* TODO fill here general response_t fields, like server, date etc. */
+
+	if (request->cgi) {
+		run_cgi(fd, request, fs_path);
+	}
+	else {
+		run_static(fd, request, fs_path);
 	}
 
 	return SUS_OK;
@@ -228,58 +292,33 @@ static int create_fspath(char *fs_path, const request_t *request)
 
 static int success_callback(int fd, char *buf, int rc)
 {
-#define LINUX_MAX_PATHLEN 4096
 #define URI_MAXLEN 257
 	/* NOTE this function will be called on successfull read client's request */
 	request_t request;
-	response_t response;
 	int ret;
 
 	memset(&request, 0, sizeof(request_t));
-	memset(&response, 0, sizeof(response_t));
 
 	ret = parse_request(buf, &request);
 	if (ret == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed \"parse_request()\"");
-		return SUS_ERROR;
+		goto error;
 	}
+
 	dump_request(&request); // dumps request to screen with DEBUG
 	log_access(&request, rc); // dumps request to access.log without DEBUG
 
-#if 1
-	char fs_path[LINUX_MAX_PATHLEN];
-	memset(fs_path, 0, LINUX_MAX_PATHLEN);
-	
-	if (create_fspath(fs_path, &request) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"create_fspath()\"");
-		return SUS_ERROR;
+	/* TODO Prepare response */
+	if (kgo_response(fd, &request) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed \"handle_request()\"");
+		goto error;
 	}
 
-	if (!file_exists(fs_path)) {
-		/* TODO send 404 */
-		return SUS_ERROR;
-	}
-
-	if (request.cgi) {
-		// TODO call cgi, grab its output and send response
-	} else {
-		// TODO load file and send response
-	}
-
-#ifdef DEBUG
-	printf("%s\n", fs_path);
-#endif
-
-#endif
-
-	/* TODO Prepare response
-	 * and send it back to the user */
-	send_response(fd); // test function
-	
 	fre_req(&request);
-	fre_res(&response);
-
 	return SUS_OK;
+error:
+	fre_req(&request);
+	return SUS_ERROR;
 }
 
 static int disconnect_callback(int *fd)
@@ -296,7 +335,7 @@ static void cycle_cons(
 		int (*fd_success)(int fd, char *buf, int rc),
 		int (*fd_disconnected)(int *fd))
 {
-	int n, i, rc, ret, client_disconnected;
+	int n, i, rc, client_disconnected;
 	char buf[REQUEST_BUFSIZE];
 
 	n = nfds;
@@ -305,16 +344,17 @@ static void cycle_cons(
 		if (fds[i].revents & POLLIN) {
 			/* NOTE can read fd and handle it */
 			rc = read_clientfd(fds[i].fd, buf, WORKER_BUFSIZE);
+
 			switch (rc) {
 				case SUS_ERROR:
-					ret = fd_error(fds[i].fd);
+					fd_error(fds[i].fd);
 					break;
 				case SUS_DISCONNECTED:
-					ret = fd_disconnected(&fds[i].fd);
+					fd_disconnected(&fds[i].fd);
 					client_disconnected = 1;
 					break;
 				default:
-					ret = fd_success(fds[i].fd, buf, rc);
+					fd_success(fds[i].fd, buf, rc);
 					break;
 			}
 		}
@@ -330,9 +370,8 @@ static void cycle_cons(
 		align_fds();
 	}
 }
-#endif
 
-static void start_worker(int bridge_fd) 
+static void start_worker(int bridge_fd, void *data) 
 {
 #define TIMEOUT 10000
 	signal(SIGINT, set_signal);
@@ -359,11 +398,7 @@ static void start_worker(int bridge_fd)
 		}
 
 		if (nfds > 1) {
-#ifndef CALLBACK_CYCLE_CONS
-			cycle_cons();
-#else
 			cycle_cons(error_callback, success_callback, disconnect_callback);
-#endif
 		}
 
 signals:
@@ -387,7 +422,7 @@ int init_workers()
 
 	workerslen = get_config_workers();
 	for (i = 0; i < workerslen; i++) {
-		process_t worker_proc = create_process(start_worker);
+		process_t worker_proc = create_process(start_worker, NULL);
 		if (worker_proc.pid == INVALID_PID) {
 			return SUS_ERROR;
 		}

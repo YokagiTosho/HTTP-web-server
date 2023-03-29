@@ -1,6 +1,8 @@
 #ifndef HTTP_H
 #define HTTP_H
 
+#include "base.h"
+
 /* HTTP METHODS */
 #define HTTP_GET     0
 #define HTTP_POST    1
@@ -67,5 +69,10 @@
 #define HTTP_VARIANT_ALSO_NEGOTIATES 506
 #define HTTP_NOT_EXTENDED 510
 #define HTTP_NETWORK_AUTHENTICATION_REQUIRED 511
+
+const char *http_method_to_str(int http_method);
+const char *http_version_to_str(int http_version);
+const char *set_verbose(int status_code);
+const char *get_content_type(const char *filepath);
 
 #endif

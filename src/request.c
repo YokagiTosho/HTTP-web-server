@@ -5,12 +5,6 @@
 #define HTTP_METHODLEN 12
 #define HDRLEN 256
 
-#define MLC_CPY(dest, src) \
-	do { \
-		dest = malloc(strlen(src)+1); \
-		strcpy(dest, src); \
-	} while (0)
-
 static int get_hdr_type(const char *hdrtype) 
 {
 	if (strcmp(hdrtype, "Accept-Language") == 0) {
@@ -162,6 +156,28 @@ static int parse_request_uri(char **req, char *uri, int size)
 	return 0;
 }
 
+static int is_cgi(const char *uri)
+{
+	// TODO CGI directory must be taken from configuration
+	int i, len1, len2;
+	const char *cgi_dir = "/cgi-bin/"; // TODO take from configuration
+	
+	len1 = strlen(cgi_dir);
+	len2 = strlen(uri);
+
+	if (len2 < len1) {
+		return 0;
+	}
+
+	for (i = 0; i < len1; i++) {
+		if (uri[i] != cgi_dir[i]) {
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
 int parse_request(char *rawreq, request_t *s_req)
 {
 	/* TODO validate that server is working with valid HTTP request.
@@ -192,13 +208,12 @@ int parse_request(char *rawreq, request_t *s_req)
 		sus_log_error(LEVEL_PANIC, "Failed \"request_uri()\"");
 		return SUS_ERROR;
 	}
-
 	// NOTE validating URI so it does not contain ".."
 	if (strstr(uri, "..")) {
 		return SUS_ERROR;
+	} else {
+		MLC_CPY(s_req->uri, uri);
 	}
-
-	MLC_CPY(s_req->uri, uri);
 
 	/* VERSION */
 	ret = parse_request_version(&req, http_version, HTTP_VERSIONLEN);
@@ -241,6 +256,7 @@ int parse_request(char *rawreq, request_t *s_req)
 				MLC_CPY(s_req->cookie, hdr_value);
 				break;
 			case hdr_content_length:
+				errno = 0;
 				s_req->content_length = strtol(hdr_value, NULL, 0);
 				if (errno != 0) {
 					sus_log_error(LEVEL_PANIC, "Failed \"strtol()\": %s", strerror(errno));
@@ -270,9 +286,13 @@ int parse_request(char *rawreq, request_t *s_req)
 	if (!strchr(s_req->uri, '.')) {
 		s_req->dir = 1;
 	}
-	if (strstr(s_req->uri, "/cgi-bin/")) {
+	if (is_cgi(s_req->uri)) {
+#ifdef DEBUG
+		printf("IS CGI\n");
+#endif
 		s_req->cgi = 1;
 	}
+
 	if (strchr(s_req->uri, '?')) {
 		s_req->args = 1;
 	}

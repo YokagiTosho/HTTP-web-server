@@ -2,6 +2,7 @@ run
 *.log
 *.sh
 *.txt
+*.py
 examples/
 
 webserver

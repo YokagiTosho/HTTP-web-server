@@ -1,6 +1,6 @@
 #include "log.h"
 
-#define LOG_BUFSIZE 512
+#define LOG_BUFSIZE 1024
 
 static char *buf;
 
@@ -24,6 +24,7 @@ int log_error(int log_level, const char *fmt, const char *srcfile, const char *f
 			exit(1);
 		}
 	}
+
 	memset(buf, 0, LOG_BUFSIZE);
 
 	ret = vsnprintf(buf, LOG_BUFSIZE, fmt, ap);
