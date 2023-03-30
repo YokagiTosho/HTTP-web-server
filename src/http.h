@@ -3,6 +3,21 @@
 
 #include "base.h"
 
+/* MIME TYPES */
+#define TEXT_PLAIN 0
+#define TEXT_CSS 1
+#define TEXT_CSV 2
+#define TEXT_HTML 3
+#define TEXT_XML 4
+
+#define IMAGE_JPEG 5
+#define IMAGE_PNG 6
+#define IMAGE_SVG_XML 7
+
+#define APPLICATION_JAVASCRIPT 8
+#define APPLICATION_JSON 9
+#define APPLICATION_XML 10
+
 /* HTTP METHODS */
 #define HTTP_GET     0
 #define HTTP_POST    1
@@ -73,6 +88,7 @@
 const char *http_method_to_str(int http_method);
 const char *http_version_to_str(int http_version);
 const char *set_verbose(int status_code);
-const char *get_content_type(const char *filepath);
+int get_content_type(const char *filepath);
+const char *content_type_to_str(int content_type);
 
 #endif

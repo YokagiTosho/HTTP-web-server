@@ -24,33 +24,47 @@ const char *http_version_to_str(int http_version)
 	return "NULL";
 }
 
-const char *get_content_type(const char *filepath)
+int get_content_type(const char *filepath)
 {
 	char *p;
 	
 	p = strchr(filepath, '.');
-	printf("p: %s\n", p);
 	if (!p) {
-		return "text/plain";
+		return TEXT_PLAIN;
 	}
 
 	p++;
-	if      (!strcmp(p, "json")) return  "application/json";
-	else if (!strcmp(p, "js"))   return  "application/javascript";
-	else if (!strcmp(p, "html")) return  "text/html";
-	else if (!strcmp(p, "css"))  return  "text/css";
-	else if (!strcmp(p, "csv"))  return  "text/csv";
-	else if (!strcmp(p, "xml"))  return  "text/xml";
-	else if (!strcmp(p, "jpeg") ||
-			    !strcmp(p, "jpg"))   return  "image/jpeg";
-	else if (!strcmp(p, "png"))  return  "image/png";
-	
-	return "text/plain";
+	if (!strcmp(p, "json")) {
+		return APPLICATION_JSON;
+	}
+	else if (!strcmp(p, "js")) {
+		return APPLICATION_JAVASCRIPT;
+	}
+	else if (!strcmp(p, "html")) {
+		return TEXT_HTML;
+	}
+	else if (!strcmp(p, "css")) {
+		return TEXT_CSS;
+	}
+	else if (!strcmp(p, "csv")) {
+		return TEXT_CSV;
+	}
+	else if (!strcmp(p, "xml")) {
+		return TEXT_XML;
+	}
+	else if (!strcmp(p, "jpeg") || !strcmp(p, "jpg")) {
+		return IMAGE_JPEG;
+	}
+	else if (!strcmp(p, "png")) {
+		return IMAGE_PNG;
+	}
+	return SUS_ERROR;
 }
 
-#if 0
-const char *content_type_to_str(int content_type) {
-	switch (type) {
+#if 1
+const char *content_type_to_str(int content_type)
+{
+	switch (content_type) {
 		case TEXT_PLAIN:             return "text/plain";
 		case TEXT_CSS:               return "text/css";
 		case TEXT_CSV:               return "text/csv";
@@ -65,7 +79,7 @@ const char *content_type_to_str(int content_type) {
 		case APPLICATION_JSON:       return "application/json";
 		case APPLICATION_XML:        return "application/xml";
 	}
-	lr_log_panic("Undefined ContentType");
+	//lr_log_panic("Undefined ContentType");
 	return NULL;
 }
 #endif

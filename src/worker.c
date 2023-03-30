@@ -170,7 +170,10 @@ static int run_cgi(int fd, const request_t *request, const char *fs_path)
 	cgi_process.channel[0] = INVALID_SOCKET;
 	cgi_process.channel[1] = INVALID_SOCKET;
 
+	/* TODO data preparation, fill env with request variables and set its length */
 	data.fs_path = fs_path;
+	data.env = NULL;
+	data.envlen = 0;
 
 	// TODO prepare ENV for cgi, call cgi, grab its output and send response
 	cgi_process = create_process(execute_cgi, &data);
@@ -212,7 +215,20 @@ static int run_static(int fd, const request_t *request, const char *fs_path)
 	response_t response;
 
 	memset(&response, 0, sizeof(response_t));
+
 	response.content_type = get_content_type(fs_path); 
+
+	if (request->accept_encoding) {
+		if (strstr(request->accept_encoding, "gzip")) {
+			response.supported_encodings |= GZIP;
+		}
+		if (strstr(request->accept_encoding, "deflate")) {
+			response.supported_encodings |= DEFLATE;
+		}
+		if (strstr(request->accept_encoding, "br")) {
+			response.supported_encodings |= BR;
+		}
+	}
 
 	set_default_headers(&response);
 
@@ -222,14 +238,11 @@ static int run_static(int fd, const request_t *request, const char *fs_path)
 		return SUS_ERROR;
 	}
 
-#if 1
 	if (response_from_fd(static_file_fd, &response) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed \"response_from_fd()\"");
 		return SUS_ERROR;
 	}
-#endif
 
-	/* send here response */
 	if (send_response(fd, &response) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed \"send_response()\"");
 		return SUS_ERROR;
@@ -307,7 +320,9 @@ static int success_callback(int fd, char *buf, int rc)
 		goto error;
 	}
 
+#if 1
 	dump_request(&request); // dumps request to screen with DEBUG
+#endif
 	log_access(&request, rc); // dumps request to access.log without DEBUG
 
 	/* TODO Prepare response */

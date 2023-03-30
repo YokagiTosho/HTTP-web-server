@@ -4,6 +4,8 @@
 #include "base.h"
 
 #include "http.h"
+#include "compress.h"
+#include "date.h"
 
 typedef struct {
 	int http_version;
@@ -11,8 +13,11 @@ typedef struct {
 	const char *verbose;
 
 	int content_length;
+	//int headers_length;
+
 	char *connection;
-	const char *content_type;
+	//const char *content_type;
+	int content_type;
 	char *content_language;
 	char *location;
 	char *set_cookie;
@@ -25,6 +30,9 @@ typedef struct {
 	const char *body;
 
 	unsigned chunked:1;
+	unsigned supported_encodings:3;
+	unsigned do_compress:1;
+
 	int chunking_handle;
 } response_t;
 

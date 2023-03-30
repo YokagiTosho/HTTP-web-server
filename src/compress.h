@@ -5,10 +5,10 @@
 
 #include "process.h"
 
-#define GZIP    0
-#define DEFLATE 1
-#define BR      2
+#define GZIP    1
+#define DEFLATE 2
+#define BR      4
 
-int compress_data(char *dat, int dat_size, int compression_type);
+int compress_data(char *dat, int *dat_size, int compression_type);
 
 #endif
