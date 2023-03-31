@@ -8,5 +8,7 @@ void execute_cgi(int fd, void *data)
 	printf("from run_cgi: %s\n", cgi_data->fs_path);
 #endif
 
+	// NOTE use setnev, instead making array of ENV variables
+
 	exit(0);
 }

@@ -84,10 +84,10 @@ static config_err_t parse_opt(const char *line, option_t *opt)
 		opt->value[i] = *curr;
 	} opt->value[i] = '\0';
 
-	if (!strcmp(opt->key, "addr")) {
+	if (!strcmp(opt->key, "Addr")) {
 		opt->opt = config_addr;
 	}
-	else if (!strcmp(opt->key, "port")) {
+	else if (!strcmp(opt->key, "Port")) {
 		opt->opt = config_port;
 	}
 #if 0
@@ -95,7 +95,7 @@ static config_err_t parse_opt(const char *line, option_t *opt)
 		opt->opt = config_max_conn;
 	}
 #endif
-	else if (!strcmp(opt->key, "workers")) {
+	else if (!strcmp(opt->key, "Workers")) {
 		opt->opt = config_workers;
 	}
 	else {

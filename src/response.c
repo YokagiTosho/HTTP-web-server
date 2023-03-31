@@ -1,8 +1,6 @@
 #include "response.h"
 
-//#define BUFLEN 128 // NOTE reduced from 8192 to implement chunking and test it. Make this 8192 back again
-//#define BUFLEN 8192 // NOTE reduced from 8192 to implement chunking and test it. Make this 8192 back again
-#define BUFLEN 2048
+#define BUFLEN 8192
 static char *buf; // NOTE buf is global variable, because worker is single-threaded thus syncronised,
                   // no double access to the same memory
 
@@ -38,6 +36,7 @@ int set_default_headers(response_t *response)
 {
 	response->server = "SUS/0.1";
 	response->http_version = HTTP_VERSION1_1;
+	response->connection = "keep-alive";
 	response->date = http_gmtime(time(0));
 
 	return SUS_OK;
@@ -125,7 +124,7 @@ static int response_set_raw_body(struct raw_response *raw, const response_t *res
 
 static int response_to_raw(struct raw_response *raw, const response_t *response)
 {
-	/* Used to make raw bytes from response, to send over network */
+	/* Used to make raw bytes from response to send over network */
 
 	/* TODO after Memory Pool is implemented, allocate there, instead of malloc */
 	raw->bytes = malloc(BUFLEN);
@@ -205,6 +204,7 @@ static int response_compress(response_t *response)
 			sus_log_error(LEVEL_PANIC, "Failed \"compress_data()\"");
 			return SUS_ERROR;
 		}
+		response->content_encoding = "gzip";
 	}
 	return SUS_OK;
 }
@@ -218,10 +218,6 @@ int send_response(int fd, response_t *response)
 		.content_length = 0,
 	};
 
-	/* TODO decide here: do I need to compress data and chunk it or not 
-	 * If compress: compress here response body 
-	 * If chunk: first send headers to User-Agent(fd),
-	 *           then splitted body(it must be splitted first, obviously */
 	if (response->do_compress) {
 		if (response_compress(response) == SUS_ERROR) {
 			sus_log_error(LEVEL_PANIC, "Failed \"response_compress()\"");
@@ -241,7 +237,6 @@ int send_response(int fd, response_t *response)
 	if (send_headers(fd, &raw) == SUS_ERROR) {
 		goto error;
 	}
-
 	if (response->chunked) {
 		if (send_chunked(fd, response) == SUS_ERROR) {
 			sus_log_error(LEVEL_PANIC, "Failed \"send_chunked()\"");
@@ -370,18 +365,20 @@ void fre_res(response_t *response)
 		} \
 	} while (0)
 
-	FRE_NNUL(connection);
 	FRE_NNUL(content_language);
 	FRE_NNUL(location);
 	FRE_NNUL(set_cookie);
 	FRE_NNUL(last_modified);
-	FRE_NNUL(content_encoding);
 	FRE_NNUL(date);
 	//FRE_NNUL(body);
 
+	response->content_encoding = NULL;
 	response->transfer_encoding = NULL;
+	response->server = NULL;
+	response->verbose = NULL;
 	response->body = NULL;
-	memset(buf, 0, BUFLEN);
+	response->connection = NULL;
 
+	memset(buf, 0, BUFLEN);
 	response->chunking_handle = -1;
 }

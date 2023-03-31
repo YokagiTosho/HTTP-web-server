@@ -15,13 +15,13 @@ typedef struct {
 	int content_length;
 	//int headers_length;
 
-	char *connection;
+	const char *connection;
 	//const char *content_type;
 	int content_type;
 	char *content_language;
 	char *location;
 	char *set_cookie;
-	char *content_encoding; // if not NULL, then must be compressed with compresser it points to
+	const char *content_encoding; // if not NULL, then must be compressed with compresser it points to
 	char *transfer_encoding; // if not NULL and points to string 'chunked', field chunked should be 1
 	char *date;
 	char *last_modified;

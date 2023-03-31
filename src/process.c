@@ -3,9 +3,11 @@
 process_t create_process(void (*run)(int fd, void *data), void *data)
 {
 	process_t proc;
-	proc.pid = -1;
-
 	pid_t pid;
+
+	proc.channel[0] = INVALID_SOCKET;
+	proc.channel[1] = INVALID_SOCKET;
+	proc.pid = -1;
 
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, proc.channel) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed \"socketpair()\": %s", strerror(errno));
@@ -28,15 +30,17 @@ process_t create_process(void (*run)(int fd, void *data), void *data)
 			proc.channel[0] = INVALID_SOCKET;
 
 			run(proc.channel[1], data);
+			// NOTE usually should not be reached, 'run' callback should contain its own mechanism to exit
+			exit(0);
 			break;
 		default:
 			if (close(proc.channel[1]) == -1) {
 				sus_log_error(LEVEL_PANIC, "Failed \"close()\" in the caller: %s", strerror(errno));
 				exit(1);
 			}
-			
 			break;
 	}
+
 	proc.pid = pid;
 	proc.channel[1] = INVALID_SOCKET;
 #ifdef DEBUG
@@ -57,8 +61,5 @@ int wait_process(const process_t *process)
 		sus_log_error(LEVEL_PANIC, "Failed \"waitpid()\": %s", strerror(errno));
 		return SUS_ERROR;
 	}
-
-	// TODO check return code of the process
-
 	return wstatus;
 }

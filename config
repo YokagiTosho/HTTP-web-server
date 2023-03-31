@@ -1,10 +1,22 @@
-addr 127.0.0.1
-port 8000
+Addr 127.0.0.1
+Port 8000
 
-#max_con 128
-workers 1
-#poll_timeout 10000
+#MaxCon 128
+Workers 1
+#PollTimeout 10000
 
 #BaseDir ./examples/
 #CgiDir /cgi-bin/
 #CgiFile .cgi
+
+#Total 'heap' pool available to worker
+#MemoryPool 4MB
+
+#InBuf used for request buffer
+#InBuf 1MB
+
+#OutBuf used for response buffer
+#OutBuf 1MB
+
+#CacheBuf is used for caching error HTML pages, 'hot' static files
+#CacheBuf 512KB
