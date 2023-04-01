@@ -5,9 +5,9 @@ Port 8000
 Workers 1
 #PollTimeout 10000
 
-#BaseDir ./examples/
-#CgiDir /cgi-bin/
-#CgiFile .cgi
+BaseDir examples/
+CgiDir /cgi-bin/
+CgiFile .cgi
 
 #Total 'heap' pool available to worker
 #MemoryPool 4MB

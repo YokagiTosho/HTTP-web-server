@@ -60,6 +60,11 @@ static int compress_gzip(char *dat, int *dat_size)
 		sus_log_error(LEVEL_PANIC, "Failed \"fstat()\": %s", strerror(errno));
 		return SUS_ERROR;
 	}
+
+	if (statbuf.st_size > *dat_size) {
+		sus_log_error(LEVEL_PANIC, "statbuf.st_size(%d) > *dat_size(%d) for no reason", statbuf.st_size, *dat_size);
+		return SUS_ERROR;
+	}
 	/* TODO check statbuf.st_size for errors */
 
 	if (lseek(tmp_fd, 0, SEEK_SET) == -1) {
@@ -101,7 +106,7 @@ int compress_data(char *dat, int *dat_size, int compression_type)
 			return SUS_ERROR;
 			break;
 		default:
-			sus_log_error(LEVEL_PANIC, "Unregonized compression method: %d", compression_type);
+			sus_log_error(LEVEL_PANIC, "Unrecognized compression method: %d", compression_type);
 			return SUS_ERROR;
 	}
 	return SUS_OK;

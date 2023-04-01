@@ -82,29 +82,8 @@ static int process_signal()
 	return SUS_OK;
 }
 
-#include "compress.h"
 int main(int argc, char **argv)
 {
-#if 0
-	char buf[2048];
-	int size = 2048, rc;
-
-	int fd = open("examples/index.html", O_RDONLY);
-	if (fd == -1) {
-		sus_log_error(LEVEL_PANIC, "Failed \"open()\": %s", strerror(errno));
-		return 1;
-	}
-	rc = read(fd, buf, size);
-	if (rc == -1) {
-		sus_log_error(LEVEL_PANIC, "Failed \"read()\": %s", strerror(errno));
-		return 1;
-	}
-	if (compress_data(buf, &rc, GZIP) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"compress_data()\"");
-		return SUS_ERROR;
-	}
-	return 0;
-#endif
 	close(STDIN_FILENO);
 
 	redir_stream("error.log", STDERR_FILENO);
@@ -112,7 +91,9 @@ int main(int argc, char **argv)
 	redir_stream("access.log", STDOUT_FILENO);
 #endif
 
-	parse_config();
+	if (parse_config() == SUS_ERROR) {
+		return 1;
+	}
 
 	int ret;
 

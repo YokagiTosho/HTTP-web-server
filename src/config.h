@@ -7,41 +7,37 @@
 #include <stdio.h>
 #include <string.h>
 
-
 #include <arpa/inet.h>
 
 typedef enum config_options {
 	config_addr,
 	config_port,
-	config_max_conn,
 	config_workers,
+	config_poll_timeout,
+	config_base_dir,
+	config_cgi_dir,
+	config_cgifile,
 } config_options_t;
-
-typedef enum config_err {
-	config_ok,
-	config_not_opt,
-	config_undefined_param,
-} config_err_t;
 
 typedef struct {
 	int ip;
 	short port;
-	int max_con;
 	int workers;
+	int poll_timeout;
+	char base_dir[255];
+	char cgi_dir[255];
+	char cgi_file[255];
 } config_t;
 
 
-typedef struct {
-	char key[128];
-	char value[128];
-	config_options_t opt;
-} option_t;
-
-void parse_config();
+int parse_config();
 
 int get_config_addr();
 short get_config_port();
-int get_config_max_con();
 int get_config_workers();
+
+const char *get_config_basedir();
+const char *get_config_cgidir();
+const char *get_config_cgifile();
 
 #endif

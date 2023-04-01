@@ -74,7 +74,6 @@ static int process_bridge_data(int fd)
 {
 	int rc;
 	channel_t ch;
-	//response_t response;
 
 	rc = recv_fd(fd, &ch, sizeof(channel_t));
 	if (rc == SUS_ERROR) {
@@ -299,7 +298,9 @@ static int kgo_response(int fd, const request_t *request)
 		run_cgi(fd, request, fs_path);
 	}
 	else {
-		run_static(fd, request, fs_path);
+		if (run_static(fd, request, fs_path) == SUS_ERROR) {
+			/* TODO look for global var sus_errno and send client an error */
+		}
 	}
 
 	return SUS_OK;

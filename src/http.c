@@ -61,7 +61,6 @@ int get_content_type(const char *filepath)
 	return SUS_ERROR;
 }
 
-#if 1
 const char *content_type_to_str(int content_type)
 {
 	switch (content_type) {
@@ -79,10 +78,8 @@ const char *content_type_to_str(int content_type)
 		case APPLICATION_JSON:       return "application/json";
 		case APPLICATION_XML:        return "application/xml";
 	}
-	//lr_log_panic("Undefined ContentType");
 	return NULL;
 }
-#endif
 
 const char *set_verbose(int status_code)
 {

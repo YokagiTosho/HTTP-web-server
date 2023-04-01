@@ -3,8 +3,13 @@
 static config_t CONFIG = {
 	.ip      = 0,
 	.port    = 8000,
-	.max_con = 50,
 	.workers = 1,
+	.poll_timeout = 10000,
+};
+
+char *CONFIG_KEYS[] = {
+	"Addr", "Port", "Workers", "PollTimeout", 
+	"BaseDir", "CgiDir", "CgiFile", NULL,
 };
 
 int get_config_addr()
@@ -17,132 +22,131 @@ short get_config_port()
 	return CONFIG.port;
 }
 
-int get_config_max_con()
-{
-	return CONFIG.max_con;
-}
-
 int get_config_workers()
 {
 	return CONFIG.workers;
 }
 
-static void get_config_opt_val(const option_t *opt) {
-	//int res;
-	switch (opt->opt) {
+int get_config_polltimeout()
+{
+	return CONFIG.poll_timeout;
+}
+
+const char *get_config_basedir()
+{
+	if (strlen(CONFIG.base_dir)) {
+		return CONFIG.base_dir;
+	}
+	return NULL;
+}
+const char *get_config_cgidir()
+{
+	if (strlen(CONFIG.cgi_dir)) {
+		return CONFIG.cgi_dir;
+	}
+	return NULL;
+
+}
+const char *get_config_cgifile()
+{
+	if (strlen(CONFIG.cgi_file)) {
+		return CONFIG.cgi_file;
+	}
+	return NULL;
+}
+
+static int get_option(const char *key)
+{
+	int i;
+	for (i = 0; CONFIG_KEYS[i] != NULL; i++) {
+		if (strcmp(key, CONFIG_KEYS[i]) == 0) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+static int parse_line(const char *line, size_t linelen)
+{
+	char *p, key[128], value[128];
+	int keylen, vallen, option;
+
+	p = strchr(line, ' ');
+	if (!p) {
+		return SUS_ERROR;
+	}
+
+	keylen = (int)(p-line);
+	vallen = (int)(linelen-keylen-1);
+
+	strncpy(key, line, keylen);
+	key[keylen] = 0;
+	strncpy(value, line+keylen+1, vallen);
+	value[vallen] = 0;
+
+	option = get_option(key);
+	switch (option) {
 		case config_addr:
-			inet_pton(AF_INET, opt->value, &CONFIG.ip);
-			/* TODO error check */
-#ifdef DEBUG
-			printf("addr: %d\n", CONFIG.ip);
-#endif
+			inet_pton(AF_INET, value, &CONFIG.ip);
 			break;
 		case config_port:
-			CONFIG.port = atoi(opt->value);
-#ifdef DEBUG
-			printf("port: %d\n", CONFIG.port);
-#endif
-			/* TODO error check */
-			break;
-		case config_max_conn:
-			CONFIG.max_con = atoi(opt->value);
-#ifdef DEBUG
-			printf("max_con: %d\n", CONFIG.max_con);
-#endif
-			/* TODO error check */
+			CONFIG.port = atoi(value);
 			break;
 		case config_workers:
-			CONFIG.workers = atoi(opt->value);
-			if (CONFIG.workers > MAX_WORKERS) {
-				sus_log_error(LEVEL_WARNING, "workers %d > max workers %d: setting to default(1)\n", CONFIG.workers, MAX_WORKERS);
-				CONFIG.workers = 1;
-			}
-#ifdef DEBUG
-			printf("workers: %d\n", CONFIG.workers);
-#endif
-			/* TODO error check */
+			CONFIG.workers = atoi(value);
 			break;
+		case config_poll_timeout:
+			/* TODO */
+			//CONFIG.poll_timeout = 
+			break;
+		case config_base_dir:
+			strncpy(CONFIG.base_dir, value, vallen);
+			break;
+		case config_cgi_dir:
+			strncpy(CONFIG.cgi_dir, value, vallen);
+			break;
+		case config_cgifile:
+			strncpy(CONFIG.cgi_file, value, vallen);
+			break;
+		default:
+			return SUS_ERROR;
 	}
-}
-
-static config_err_t parse_opt(const char *line, option_t *opt)
-{
-	char *space = NULL;
-	const char *curr = NULL;
-	int i;
-
-	space = strchr(line, ' ');
-	if (!space) {
-		return config_not_opt;
-	}
-
-	for (i = 0, curr = line; curr != space; ++curr, ++i) {
-		opt->key[i] = *curr;
-	} opt->key[i] = '\0';
-
-	for (i = 0, curr = space+1; *curr; ++curr, ++i) {
-		opt->value[i] = *curr;
-	} opt->value[i] = '\0';
-
-	if (!strcmp(opt->key, "Addr")) {
-		opt->opt = config_addr;
-	}
-	else if (!strcmp(opt->key, "Port")) {
-		opt->opt = config_port;
-	}
-#if 0
-	else if (!strcmp(opt->key, "max_con")) {
-		opt->opt = config_max_conn;
-	}
+#ifdef DEBUG
+	fprintf(stdout, "%s: %s\n", key, value);
 #endif
-	else if (!strcmp(opt->key, "Workers")) {
-		opt->opt = config_workers;
-	}
-	else {
-		return config_undefined_param;
-	}
-
-	return config_ok;
+	return SUS_OK;
 }
 
-void parse_config()
+int parse_config()
 {
 	char line[256];
-	int res;
-	option_t opt;
+	int linen = 0, linelen;
 
 	FILE *config_file = fopen("config", "r");
 	if (!config_file) {
 		sus_log_error(LEVEL_PANIC, "Could not open config: %s", strerror(errno));
-		exit(1);
+		return SUS_ERROR;
 	}
 
 	while (fgets(line, 256, config_file)) {
 		if (line[0] == '#' || line[0] == '\n') {
-			/* if its comment or empty line skip it */
+			linen++;
 			continue;
 		}
+		linelen = strlen(line);
+		line[--linelen] = 0;
 
-		res = parse_opt(line, &opt);
-		switch (res) {
-			case config_ok:
-				get_config_opt_val(&opt);
-				break;
-			case config_not_opt:
-				sus_log_error(LEVEL_WARNING, "Not an option!: %s", line);
-				continue;
-				break;
-			case config_undefined_param:
-				sus_log_error(LEVEL_PANIC, "Error config_undefined_param!: %s", line);
-				continue;
-				break;
-			default:
-				sus_log_error(LEVEL_PANIC, "Failed at parse_opt");
-				continue;
-				break;
+		if (parse_line(line, linelen) == SUS_ERROR) {
+#ifdef DEBUG
+			fprintf(stdout, "Error on line %d\n", linen);
+#endif
+			sus_log_error(LEVEL_PANIC, "Error on line %d: %s", linen, line);
+			return SUS_ERROR;
 		}
+		linen++;
 	}
-	fclose(config_file);
+	return SUS_OK;
+}
 
 #if 0
 #ifdef DEBUG
@@ -154,5 +158,5 @@ void parse_config()
 			CONFIG.port,
 			CONFIG.max_con);
 #endif
-#endif
 }
+#endif

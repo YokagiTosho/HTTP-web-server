@@ -104,10 +104,8 @@ static int response_set_raw_body(struct raw_response *raw, const response_t *res
 	int size = response->content_length;
 
 	if (response->body) {
-		if (response->content_length > 0) {
-			memcpy(raw->bytes+offset,
-					response->body,
-					size);
+		if (size > 0) {
+			memcpy(raw->bytes+offset, response->body, size);
 			raw->content_length = size;
 			//fprintf(stdout, "raw->content_length: %d\n", raw->content_length);
 		} else {
@@ -276,6 +274,8 @@ int send_hardcoded_msg(int fd, const char *msg, int size)
 
 static int response_from_file(int fd, response_t *response, struct stat *statbuf)
 {
+	// TODO make SIZE_TO_COMPRESS in config variable?
+#define SIZE_TO_COMPRESS 1024
 	/* TODO read fd(file), make response */
 	int ret, file_size;
 
@@ -286,7 +286,7 @@ static int response_from_file(int fd, response_t *response, struct stat *statbuf
 
 	if (response->content_type != IMAGE_JPEG 
 			&& response->content_type != IMAGE_PNG
-			&& file_size > 1024
+			&& file_size > SIZE_TO_COMPRESS
 			&& !response->chunked)
 	{
 		response->do_compress = 1;
@@ -379,6 +379,6 @@ void fre_res(response_t *response)
 	response->body = NULL;
 	response->connection = NULL;
 
-	memset(buf, 0, BUFLEN);
+	//memset(buf, 0, BUFLEN);
 	response->chunking_handle = -1;
 }
