@@ -127,8 +127,15 @@ static int create_fspath(char *fs_path, const request_t *request)
 {
 	int i, args_st;
 	char *p;
+	const char *basedir = get_config_basedir();
 
-	strcpy(fs_path, "examples/"); // TODO change this to config variable, HARDCODED for test
+	if (!basedir) {
+		sus_log_error(LEVEL_PANIC, "No BaseDir specified in config");
+		exit(1);
+	}
+
+	strcpy(fs_path, basedir);
+
 	if (request->args) {
 		p = strchr(request->uri, '?');
 		if (!p) { 
@@ -146,9 +153,9 @@ static int create_fspath(char *fs_path, const request_t *request)
 	}
 
 	if (request->dir && !request->cgi) {
-		strcat(fs_path, "index.html"); // TODO take from configuration as well
+		strcat(fs_path, get_config_default_html());
 	} else if (request->dir && request->cgi){
-		strcat(fs_path, "index.cgi"); // TODO take from configuration as well
+		strcat(fs_path, get_config_default_cgi());
 	}
 
 	return SUS_OK;
@@ -199,6 +206,7 @@ static int run_cgi(int fd, const request_t *request, const char *fs_path)
 
 	if (close(cgi_process.channel[0]) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
+		return SUS_ERROR;
 	}
 
 	fre_res(&response);
@@ -208,7 +216,7 @@ static int run_cgi(int fd, const request_t *request, const char *fs_path)
 static int run_static(int fd, const request_t *request, const char *fs_path)
 {
 	/* Loads static file, makes response and sends it to fd 
-	 * Also static files should be cached if file is hot. 
+	 * Also static files should be cached if file is 'hot'. 
 	 * Look for Transfer-Encoding: chunked for big files */
 	int static_file_fd;
 	response_t response;
@@ -249,10 +257,10 @@ static int run_static(int fd, const request_t *request, const char *fs_path)
 
 	if (close(static_file_fd) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
+		return SUS_ERROR;
 	}
 
 	fre_res(&response);
-
 	return SUS_OK;
 }
 
@@ -268,26 +276,13 @@ static int kgo_response(int fd, const request_t *request)
 	}
 
 #ifdef DEBUG
-	printf("fs_path: %s\n", fs_path);
+	fprintf(stdout, "fs_path: %s\n", fs_path);
 #endif
 
 	if (!file_exists(fs_path)) {
-		char not_found_msg[] = 
-			"HTTP/1.1 404 Not Found\r\n"
-			"Content-Type: text/html\r\n"
-			"Connection: keep-alive\r\n"
-			"Content-Length: 182\r\n"
-			"\r\n"
-			"<html>"
-			"<head><title>404 Not Found</title></head>"
-			"<body>"
-			"<h1>Not Found</h1></body>"
-			"<p>The requested URL was not found on this server</p>"
-			"<hr>"
-			"<p>Simple Unattractive Server</p>"
-			"</body>"
-			"</html>";
-		send_hardcoded_msg(fd, not_found_msg, sizeof(not_found_msg)-1);
+		if (send_response_error(fd, HTTP_NOT_FOUND) == SUS_ERROR) {
+			sus_log_error(LEVEL_PANIC, "Failed \"send_response_error()\"");
+		}
 		return SUS_OK;
 	}
 
@@ -295,7 +290,9 @@ static int kgo_response(int fd, const request_t *request)
 	/* TODO fill here general response_t fields, like server, date etc. */
 
 	if (request->cgi) {
-		run_cgi(fd, request, fs_path);
+		if (run_cgi(fd, request, fs_path) == SUS_ERROR) {
+			/* TODO look for global var sus_errno and send client an error */
+		}
 	}
 	else {
 		if (run_static(fd, request, fs_path) == SUS_ERROR) {
@@ -342,7 +339,7 @@ error:
 static int disconnect_callback(int *fd)
 {
 #ifdef DEBUG
-	printf("%d disconnected\n", *fd);
+	fprintf(stdout, "%d disconnected\n", *fd);
 #endif
 	query_disconnect(fd);
 	return SUS_OK;
@@ -375,11 +372,12 @@ static void cycle_cons(
 					fd_success(fds[i].fd, buf, rc);
 					break;
 			}
-		}
-		else if (fds[i].revents & POLLERR) {
+		} else if (fds[i].revents & POLLERR) {
 			sus_log_error(LEVEL_PANIC, "Socket %d received POLLERR", fds[i].fd);
 			query_disconnect(&fds[i].fd);
 			client_disconnected = 1;
+		} else if (!(fds[i].revents & POLLIN)) {
+			/* No data for fds[i].fd after poll(): TODO disconnect it */
 		}
 	}
 
@@ -391,13 +389,14 @@ static void cycle_cons(
 
 static void start_worker(int bridge_fd, void *data) 
 {
-#define TIMEOUT 10000
 	signal(SIGINT, set_signal);
 	addfd_fds(bridge_fd);
+
 	int n;
+	int timeout = get_config_polltimeout();
 	
 	for ( ;; ) {
-		n = poll(fds, nfds, TIMEOUT);
+		n = poll(fds, nfds, timeout);
 		switch (n) {
 		case -1:
 			if (errno != EINTR) {

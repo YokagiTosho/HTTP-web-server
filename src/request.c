@@ -158,10 +158,14 @@ static int parse_request_uri(char **req, char *uri, int size)
 
 static int is_cgi(const char *uri)
 {
-	// TODO CGI directory must be taken from configuration
 	int i, len1, len2;
-	const char *cgi_dir = "/cgi-bin/"; // TODO take from configuration
-	
+	const char *cgi_dir = get_config_cgidir();
+#if 0
+	if (!cgi_dir) {
+		cgi_dir = "/cgi-bin/";
+	}
+#endif
+
 	len1 = strlen(cgi_dir);
 	len2 = strlen(uri);
 
@@ -257,11 +261,7 @@ int parse_request(char *rawreq, request_t *s_req)
 				break;
 			case hdr_content_length:
 				errno = 0;
-				s_req->content_length = strtol(hdr_value, NULL, 0);
-				if (errno != 0) {
-					sus_log_error(LEVEL_PANIC, "Failed \"strtol()\": %s", strerror(errno));
-					return SUS_ERROR;
-				}
+				CONVERT_TO_INT(s_req->content_length, hdr_value);
 				break;
 			case hdr_content_type:
 				MLC_CPY(s_req->content_type, hdr_value);
@@ -288,7 +288,7 @@ int parse_request(char *rawreq, request_t *s_req)
 	}
 	if (is_cgi(s_req->uri)) {
 #ifdef DEBUG
-		printf("IS CGI\n");
+		fprintf(stdout, "IS CGI\n");
 #endif
 		s_req->cgi = 1;
 	}
@@ -303,7 +303,7 @@ int parse_request(char *rawreq, request_t *s_req)
 void dump_request(const request_t *request)
 {
 #ifdef DEBUG
-	printf(
+	fprintf(stdout,
 			"uri: %s\n"
 			"host: %s\n"
 			"accept: %s\n"

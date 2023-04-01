@@ -61,11 +61,10 @@ static int compress_gzip(char *dat, int *dat_size)
 		return SUS_ERROR;
 	}
 
-	if (statbuf.st_size > *dat_size) {
-		sus_log_error(LEVEL_PANIC, "statbuf.st_size(%d) > *dat_size(%d) for no reason", statbuf.st_size, *dat_size);
+	if (statbuf.st_size > *dat_size || statbuf.st_size <= 0) {
+		sus_log_error(LEVEL_PANIC, "Wrong \"statbuf.st_size\": %d", statbuf.st_size);
 		return SUS_ERROR;
 	}
-	/* TODO check statbuf.st_size for errors */
 
 	if (lseek(tmp_fd, 0, SEEK_SET) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed \"lseek()\": %s", strerror(errno));
@@ -77,7 +76,6 @@ static int compress_gzip(char *dat, int *dat_size)
 		sus_log_error(LEVEL_PANIC, "Failed \"read()\" tmp file: %s", strerror(errno));
 		return SUS_ERROR;
 	}
-
 	*dat_size = ret;
 
 	if (unlink(tmp_path) == -1) {
@@ -100,11 +98,9 @@ int compress_data(char *dat, int *dat_size, int compression_type)
 		case DEFLATE:
 			sus_log_error(LEVEL_PANIC, "Unsupported deflate compression method");
 			return SUS_ERROR;
-			break;
 		case BR:
 			sus_log_error(LEVEL_PANIC, "Unsupported br compression method");
 			return SUS_ERROR;
-			break;
 		default:
 			sus_log_error(LEVEL_PANIC, "Unrecognized compression method: %d", compression_type);
 			return SUS_ERROR;

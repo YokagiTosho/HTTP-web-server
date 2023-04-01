@@ -17,7 +17,7 @@ static int server_socket_bind(int fd)
 
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(get_config_port());
-	addr.sin_addr.s_addr = htonl(get_config_addr());
+	addr.sin_addr.s_addr = get_config_addr(); // already in network byte order
 
 	if (bind(fd, (struct sockaddr *)&addr, sizeof(struct sockaddr_in)) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed to bind socket: %s", strerror(errno));

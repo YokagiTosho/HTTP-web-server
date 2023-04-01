@@ -4,6 +4,7 @@
 #include "base.h"
 
 #include "http.h"
+#include "config.h"
 
 enum http_request_headers {
 	hdr_accept_language = 1,

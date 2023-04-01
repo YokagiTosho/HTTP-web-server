@@ -1,15 +1,16 @@
 #include "config.h"
 
 static config_t CONFIG = {
-	.ip      = 0,
-	.port    = 8000,
-	.workers = 1,
+	.ip           = 0,
+	.port         = 8000,
+	.workers      = 1,
 	.poll_timeout = 10000,
 };
 
 char *CONFIG_KEYS[] = {
 	"Addr", "Port", "Workers", "PollTimeout", 
-	"BaseDir", "CgiDir", "CgiFile", NULL,
+	"BaseDir", "CgiDir", "CgiFile", 
+	"DefaultHtml", "DefaultCgi", NULL,
 };
 
 int get_config_addr()
@@ -32,30 +33,35 @@ int get_config_polltimeout()
 	return CONFIG.poll_timeout;
 }
 
+#define RETURN_CONFIG_STR(FIELD, DEFAULT) \
+	do { if (CONFIG.FIELD[0]) return CONFIG.FIELD; return DEFAULT; } while (0)
+
 const char *get_config_basedir()
 {
-	if (strlen(CONFIG.base_dir)) {
-		return CONFIG.base_dir;
-	}
-	return NULL;
+	RETURN_CONFIG_STR(base_dir, NULL);
 }
+
 const char *get_config_cgidir()
 {
-	if (strlen(CONFIG.cgi_dir)) {
-		return CONFIG.cgi_dir;
-	}
-	return NULL;
-
+	RETURN_CONFIG_STR(cgi_dir, "/cgi-bin/");
 }
+
 const char *get_config_cgifile()
 {
-	if (strlen(CONFIG.cgi_file)) {
-		return CONFIG.cgi_file;
-	}
-	return NULL;
+	RETURN_CONFIG_STR(cgi_file, ".cgi");
 }
 
-static int get_option(const char *key)
+const char *get_config_default_html()
+{
+	RETURN_CONFIG_STR(default_html, "index.html");
+}
+
+const char *get_config_default_cgi()
+{
+	RETURN_CONFIG_STR(default_cgi, "index.cgi");
+}
+
+static config_options_t get_option(const char *key)
 {
 	int i;
 	for (i = 0; CONFIG_KEYS[i] != NULL; i++) {
@@ -69,7 +75,8 @@ static int get_option(const char *key)
 static int parse_line(const char *line, size_t linelen)
 {
 	char *p, key[128], value[128];
-	int keylen, vallen, option;
+	int keylen, vallen;
+	config_options_t option;
 
 	p = strchr(line, ' ');
 	if (!p) {
@@ -80,40 +87,77 @@ static int parse_line(const char *line, size_t linelen)
 	vallen = (int)(linelen-keylen-1);
 
 	strncpy(key, line, keylen);
-	key[keylen] = 0;
+	key[keylen] = '\0';
 	strncpy(value, line+keylen+1, vallen);
-	value[vallen] = 0;
+	value[vallen] = '\0';
 
 	option = get_option(key);
 	switch (option) {
 		case config_addr:
-			inet_pton(AF_INET, value, &CONFIG.ip);
+			if (inet_pton(AF_INET, value, &CONFIG.ip) == -1) {
+				sus_log_error(LEVEL_PANIC, "Failed \"inet_pton()\": %s", strerror(errno));
+				return SUS_ERROR;
+			}
+#ifdef DEBUG
+			fprintf(stdout, "Addr: %d.%d.%d.%d\n",
+					(CONFIG.ip & 0xff),
+					(CONFIG.ip >> 8) & 0xff,
+					(CONFIG.ip >> 16) & 0xff,
+					(CONFIG.ip >> 24));
+#endif
 			break;
 		case config_port:
-			CONFIG.port = atoi(value);
+			CONVERT_TO_INT(CONFIG.port, value);
+#ifdef DEBUG
+			fprintf(stdout, "Port: %d\n", CONFIG.port);
+#endif
 			break;
 		case config_workers:
-			CONFIG.workers = atoi(value);
+			CONVERT_TO_INT(CONFIG.workers, value);
+#ifdef DEBUG
+			fprintf(stdout, "Workers: %d\n", CONFIG.workers);
+#endif
 			break;
 		case config_poll_timeout:
-			/* TODO */
-			//CONFIG.poll_timeout = 
+			CONVERT_TO_INT(CONFIG.poll_timeout, value);
+			CONFIG.poll_timeout *= 1000;
+#ifdef DEBUG
+			fprintf(stdout, "PollTimeout: %d\n", CONFIG.poll_timeout);
+#endif
 			break;
 		case config_base_dir:
 			strncpy(CONFIG.base_dir, value, vallen);
+#ifdef DEBUG
+			fprintf(stdout, "BaseDir: %s\n", CONFIG.base_dir);
+#endif
 			break;
 		case config_cgi_dir:
 			strncpy(CONFIG.cgi_dir, value, vallen);
+#ifdef DEBUG
+			fprintf(stdout, "CgiDir: %s\n", CONFIG.cgi_dir);
+#endif
 			break;
 		case config_cgifile:
 			strncpy(CONFIG.cgi_file, value, vallen);
+#ifdef DEBUG
+			fprintf(stdout, "CgiFile: %s\n", CONFIG.cgi_file);
+#endif
+			break;
+		case config_default_html:
+			strncpy(CONFIG.default_html, value, vallen);
+#ifdef DEBUG
+			fprintf(stdout, "DefaultHtml: %s\n", CONFIG.default_html);
+#endif
+			break;
+		case config_default_cgi:
+			strncpy(CONFIG.default_cgi, value, vallen);
+#ifdef DEBUG
+			fprintf(stdout, "DefaultCgi: %s\n", CONFIG.default_cgi);
+#endif
 			break;
 		default:
 			return SUS_ERROR;
 	}
-#ifdef DEBUG
-	fprintf(stdout, "%s: %s\n", key, value);
-#endif
 	return SUS_OK;
 }
 
@@ -147,16 +191,3 @@ int parse_config()
 	}
 	return SUS_OK;
 }
-
-#if 0
-#ifdef DEBUG
-	fprintf(stdout, "addr: %d.%d.%d.%d, port: %d, max_con: %d\n",
-			(CONFIG.ip & 0xff),
-			(CONFIG.ip >> 8) & 0xff,
-			(CONFIG.ip >> 16) & 0xff,
-			(CONFIG.ip >> 24),
-			CONFIG.port,
-			CONFIG.max_con);
-#endif
-}
-#endif

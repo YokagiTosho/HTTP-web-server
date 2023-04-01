@@ -4,5 +4,6 @@ run
 *.txt
 *.py
 examples/
+html_templates/
 
 webserver

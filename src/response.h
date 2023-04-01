@@ -6,6 +6,7 @@
 #include "http.h"
 #include "compress.h"
 #include "date.h"
+#include "errors_html.h"
 
 typedef struct {
 	int http_version;
@@ -13,10 +14,8 @@ typedef struct {
 	const char *verbose;
 
 	int content_length;
-	//int headers_length;
 
 	const char *connection;
-	//const char *content_type;
 	int content_type;
 	char *content_language;
 	char *location;
@@ -39,8 +38,8 @@ typedef struct {
 int response_from_fd(int fd, response_t *response);
 int set_default_headers(response_t *response);
 
-int send_hardcoded_msg(int fd, const char *msg, int size);
 int send_response(int fd, response_t *request);
+int send_response_error(int fd, int status);
 
 void fre_res(response_t *response);
 

@@ -13,15 +13,16 @@ process_t create_process(void (*run)(int fd, void *data), void *data)
 		sus_log_error(LEVEL_PANIC, "Failed \"socketpair()\": %s", strerror(errno));
 		return proc;
 	}
+#if 0
 #ifdef DEBUG
-	printf("after socketpair: %d-%d\n", proc.channel[0], proc.channel[1]);
+	fprintf(stdout, "after socketpair: %d-%d\n", proc.channel[0], proc.channel[1]);
+#endif
 #endif
 
 	pid = fork();
 	switch (pid) {
 		case -1:
 			sus_log_error(LEVEL_PANIC, "Failed \"fork()\": %s", strerror(errno));
-			break;
 		case 0:
 			if (close(proc.channel[0]) == -1) {
 				sus_log_error(LEVEL_PANIC, "Failed \"close()\" in child: %s", strerror(errno));
@@ -40,19 +41,18 @@ process_t create_process(void (*run)(int fd, void *data), void *data)
 			}
 			break;
 	}
-
 	proc.pid = pid;
 	proc.channel[1] = INVALID_SOCKET;
+#if 1
 #ifdef DEBUG
-	printf("Created proc %d\n", proc.pid);
+	fprintf(stdout, "Created proc %d\n", proc.pid);
+#endif
 #endif
 	return proc;
 }
 
 int wait_process(const process_t *process)
 {
-	/* NOTE wait_process() returns wstatus of awaited process */
-	// TODO
 	pid_t pid;
 	int wstatus;
 	

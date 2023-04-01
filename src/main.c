@@ -66,36 +66,36 @@ static int process_signal()
 			return SUS_ERROR;
 		} else {
 			if (pid != bridge.pid) {
+				/* TODO remove awaited worker from global var 'workers' after */
 				/* worker proc */
 #ifdef DEBUG
-				printf("waited %d worker\n", pid);
+				fprintf(stdout, "waited %d worker\n", pid);
 #endif
 			} else {
 				/* bridge proc */
 #ifdef DEBUG
-				printf("waited %d bridge\n", pid);
+				fprintf(stdout, "waited %d bridge\n", pid);
 #endif
 			}
 		}
 	}
-
 	return SUS_OK;
 }
 
 int main(int argc, char **argv)
 {
-	close(STDIN_FILENO);
+	int ret;
 
+	close(STDIN_FILENO);
 	redir_stream("error.log", STDERR_FILENO);
 #ifndef DEBUG
 	redir_stream("access.log", STDOUT_FILENO);
 #endif
 
 	if (parse_config() == SUS_ERROR) {
-		return 1;
+		exit(1);
 	}
-
-	int ret;
+	
 
 	if (init_workers() == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed init_workers()");

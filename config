@@ -3,11 +3,14 @@ Port 8000
 
 #MaxCon 128
 Workers 1
-#PollTimeout 10000
+PollTimeout 10
 
 BaseDir examples/
 CgiDir /cgi-bin/
 CgiFile .cgi
+
+DefaultHtml index.html
+DefaultCgi index.cgi
 
 #Total 'heap' pool available to worker
 #MemoryPool 4MB

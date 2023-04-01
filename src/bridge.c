@@ -56,8 +56,8 @@ static const worker_t *find_free_worker(const a_workers_t *workers)
 		if (response.busy < response.max) {
 			/* TODO retinker this stuff to be more optimizing */
 #if 0
-			printf("DEBUG: Got from worker: %d/%d\n", response.busy, response.max);
-			printf("DEBUG: Sending socket to %d\n", worker->pid);
+			fprintf(stderr, "DEBUG: Got from worker: %d/%d\n", response.busy, response.max);
+			fprintf(stderr, "DEBUG: Sending socket to %d\n", worker->pid);
 #endif
 			return worker;
 		}
@@ -73,7 +73,6 @@ static int fdacchndl(int fd)
 	 * TODO algorithm to determine who to send file descriptor! */
 	int new_socket;
 	const process_t *process = &workers[0];
-	//printf("*process: %d, %d\n", process->channel[0], process->pid);
 	if ((new_socket = accept(fd, NULL, NULL)) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed accept(): %s", strerror(errno));
 		return SUS_ERROR;

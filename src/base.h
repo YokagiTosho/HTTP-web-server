@@ -39,6 +39,7 @@
 #define MAX_WORKERS     16
 #define MAX_CONNECTIONS 128
 #define REQUEST_BUFSIZE 4096
+#define SIZE_TO_COMPRESS 1024
 
 #define DEBUG // for printf
 
@@ -52,6 +53,15 @@
 	do { \
 		close(STDIN_FILENO); \
 		close(STDOUT_FILENO); \
+	} while (0)
+
+#define CONVERT_TO_INT(dest, value) \
+	do { \
+		dest = strtol(value, NULL, 10); \
+		if ((dest == LONG_MIN || dest == LONG_MAX) && errno == ERANGE) { \
+			sus_log_error(LEVEL_PANIC, "Failed \"strtol()\": %s", strerror(errno)); \
+			return SUS_ERROR; \
+		} \
 	} while (0)
 
 #endif

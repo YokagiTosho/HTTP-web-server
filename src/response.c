@@ -36,7 +36,7 @@ int set_default_headers(response_t *response)
 {
 	response->server = "SUS/0.1";
 	response->http_version = HTTP_VERSION1_1;
-	response->connection = "keep-alive";
+	//response->connection = "keep-alive";
 	response->date = http_gmtime(time(0));
 
 	return SUS_OK;
@@ -229,7 +229,7 @@ int send_response(int fd, response_t *response)
 	}
 #if 0
 #ifdef DEBUG
-	printf("After \"response_to_raw()\": %s", raw.bytes);
+	fprintf(stdout, "After \"response_to_raw()\": %s", raw.bytes);
 #endif
 #endif
 	if (send_headers(fd, &raw) == SUS_ERROR) {
@@ -260,23 +260,43 @@ error:
 	return SUS_ERROR;
 }
 
-int send_hardcoded_msg(int fd, const char *msg, int size)
+int send_response_error(int fd, int status)
 {
-	int wc;
+	response_t response;
+	int size;
 
-	if ((wc = write(fd, msg, size)) != size) {
-		sus_log_error(LEVEL_WARNING, "write(%d) != size(%d) for not_found_msg: %s", wc, size, strerror(errno));
+	memset(&response, 0, sizeof(response_t));
+
+	response.content_type = TEXT_HTML;
+
+	set_default_headers(&response);
+
+	response.status_code = status;
+	response.verbose = set_verbose(response.status_code);
+
+	response.body = get_html_error(status);
+	if (!response.body) {
 		return SUS_ERROR;
 	}
+
+	size = strlen(response.body);
+	if (size > SIZE_TO_COMPRESS) {
+		response.do_compress = 1;
+	}
+
+	response.content_length = size;
+
+	if (send_response(fd, &response) == SUS_ERROR) {
+		return SUS_ERROR;
+	}
+
+	fre_res(&response);
 
 	return SUS_OK;
 }
 
 static int response_from_file(int fd, response_t *response, struct stat *statbuf)
 {
-	// TODO make SIZE_TO_COMPRESS in config variable?
-#define SIZE_TO_COMPRESS 1024
-	/* TODO read fd(file), make response */
 	int ret, file_size;
 
 	file_size = statbuf->st_size;
