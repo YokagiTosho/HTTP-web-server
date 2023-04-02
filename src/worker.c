@@ -7,7 +7,7 @@ static struct pollfd fds[MAX_CONNECTIONS];
 static int nfds;
 
 static int SIGINT_RECV, SIGHUP_RECV, SIGCHLD_RECV;
-static void set_signal(int sig)
+static void sus_set_signal(int sig)
 {
 	switch (sig) {
 	case SIGINT:
@@ -24,24 +24,31 @@ static void set_signal(int sig)
 	}
 }
 
-static int query_disconnect(int *socket)
+static int sus_query_disconnect(int *socket)
 {
 	int s = *socket;
+
 	if (s == INVALID_SOCKET) {
-		sus_log_error(LEVEL_PANIC, "In \"query_disconnect\" received \"INVALID_SOCKET\": %d", s);
+		sus_log_error(LEVEL_PANIC, "In \"sus_query_disconnect\" received \"INVALID_SOCKET\": %d", s);
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
+
 	if (close(s) == SOCK_ERR) {
 		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
+
 	*socket = INVALID_SOCKET;
 	return SUS_OK;
 }
 
-static int addfd_fds(int fd)
+static int sus_addfd_fds(int fd)
 {
 	if (nfds == MAX_CONNECTIONS) {
+		sus_log_error(LEVEL_PANIC, "Reached maximum(%d) available sockets", MAX_CONNECTIONS);
+		sus_set_errno(HTTP_SERVICE_UNAVAILABLE);
 		return SUS_ERROR;
 	}
 
@@ -52,7 +59,7 @@ static int addfd_fds(int fd)
 	return SUS_OK;
 }
 
-static void align_fds()
+static void sus_align_fds()
 {
 	int i, j, n = nfds;
 
@@ -70,32 +77,27 @@ static void align_fds()
 	}
 }
 
-static int process_bridge_data(int fd)
+static int sus_process_bridge_data(int fd)
 {
 	int rc;
 	channel_t ch;
 
-	rc = recv_fd(fd, &ch, sizeof(channel_t));
+	rc = sus_recv_fd(fd, &ch, sizeof(channel_t));
 	if (rc == SUS_ERROR) {
 		return SUS_ERROR;
 	}
 
 	if (ch.cmd == WORKER_RECV_FD) {
-		if (addfd_fds(ch.socket) == SUS_ERROR) {
-			/* TODO send error to client */
-			sus_log_error(LEVEL_PANIC, "Reached maximum(%d) available sockets", MAX_CONNECTIONS);
-
-			/* TODO prepare here response with error message and send it to the client */
-
+		if (sus_addfd_fds(ch.socket) == SUS_ERROR) {
+			sus_send_response_error(fd, sus_errno);
 			close(ch.socket);
 			return SUS_ERROR;
 		}
 	}
-
 	return SUS_OK;
 }
 
-static int read_clientfd(int fd, char *buf, int size)
+static int sus_read_clientfd(int fd, char *buf, int size)
 {
 	int rc;
 
@@ -111,28 +113,16 @@ static int read_clientfd(int fd, char *buf, int size)
 	return rc;
 }
 
-/* NOTE with callbacks */
-static int error_callback(int fd)
-{
-	sus_log_error(LEVEL_PANIC, "Failed to read fd %d: %s", fd, strerror(errno));
-	return SUS_OK;
-}
-
-static int file_exists(const char *filepath)
+static int sus_file_exists(const char *filepath)
 {
 	return access(filepath, F_OK | R_OK) != -1;
 }
 
-static int create_fspath(char *fs_path, const request_t *request)
+static int sus_create_fspath(char *fs_path, const request_t *request)
 {
 	int i, args_st;
 	char *p;
-	const char *basedir = get_config_basedir();
-
-	if (!basedir) {
-		sus_log_error(LEVEL_PANIC, "No BaseDir specified in config");
-		exit(1);
-	}
+	const char *basedir = sus_get_config_basedir();
 
 	strcpy(fs_path, basedir);
 
@@ -140,6 +130,8 @@ static int create_fspath(char *fs_path, const request_t *request)
 		p = strchr(request->uri, '?');
 		if (!p) { 
 			/* should not ever happen */
+			sus_log_error(LEVEL_PANIC, "p == NULL should not never happen");
+			sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 			return SUS_ERROR;
 		}
 		int fs_pathend = strlen(fs_path)+1;
@@ -153,22 +145,21 @@ static int create_fspath(char *fs_path, const request_t *request)
 	}
 
 	if (request->dir && !request->cgi) {
-		strcat(fs_path, get_config_default_html());
+		strcat(fs_path, sus_get_config_default_html());
 	} else if (request->dir && request->cgi){
-		strcat(fs_path, get_config_default_cgi());
+		strcat(fs_path, sus_get_config_default_cgi());
 	}
 
 	return SUS_OK;
 }
 
-static int run_cgi(int fd, const request_t *request, const char *fs_path)
+static int sus_run_cgi(int fd, const request_t *request, const char *fs_path)
 {
 	/* Runs CGI script, parses its output, makes response and sends it to fd */
 	process_t cgi_process;
 	response_t response;
 	struct cgi_data data;
-
-	/* TODO prepare ENV from *request */
+	int wstatus;
 
 	memset(&response, 0, sizeof(response_t));
 
@@ -176,54 +167,43 @@ static int run_cgi(int fd, const request_t *request, const char *fs_path)
 	cgi_process.channel[0] = INVALID_SOCKET;
 	cgi_process.channel[1] = INVALID_SOCKET;
 
-	/* TODO data preparation, fill env with request variables and set its length */
 	data.fs_path = fs_path;
-	data.env = NULL;
-	data.envlen = 0;
+	data.request = request;
 
-	// TODO prepare ENV for cgi, call cgi, grab its output and send response
-	cgi_process = create_process(execute_cgi, &data);
-	if (cgi_process.pid == INVALID_PID) {
-		sus_log_error(LEVEL_PANIC, "Failed \"create_process()\"");
+	if (sus_create_process(&cgi_process, sus_execute_cgi, &data) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
 
-	if (wait_process(&cgi_process) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"wait_process()\"");
+	if ((wstatus = sus_wait_process(&cgi_process)) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
 
-	if (response_from_fd(cgi_process.channel[0], &response) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"response_from_fd()\"");
+	if (sus_response_from_fd(cgi_process.channel[0], &response) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
 
-	/* send here response */
-	if (send_response(fd, &response) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"send_response()\"");
+	if (sus_send_response(fd, &response) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
 
 	if (close(cgi_process.channel[0]) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 
-	fre_res(&response);
+	sus_fre_res(&response);
 	return SUS_OK;
 }
 
-static int run_static(int fd, const request_t *request, const char *fs_path)
+static int sus_run_static(int fd, const request_t *request, const char *fs_path)
 {
-	/* Loads static file, makes response and sends it to fd 
-	 * Also static files should be cached if file is 'hot'. 
-	 * Look for Transfer-Encoding: chunked for big files */
 	int static_file_fd;
 	response_t response;
 
 	memset(&response, 0, sizeof(response_t));
 
-	response.content_type = get_content_type(fs_path); 
+	response.content_type = sus_get_content_type(fs_path); 
 
 	if (request->accept_encoding) {
 		if (strstr(request->accept_encoding, "gzip")) {
@@ -237,115 +217,113 @@ static int run_static(int fd, const request_t *request, const char *fs_path)
 		}
 	}
 
-	set_default_headers(&response);
+	sus_set_default_headers(&response);
 
 	static_file_fd = open(fs_path, O_RDONLY);
 	if (static_file_fd == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed \"open()\" %s: %s", fs_path, strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 
-	if (response_from_fd(static_file_fd, &response) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"response_from_fd()\"");
+	if (sus_response_from_fd(static_file_fd, &response) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
 
-	if (send_response(fd, &response) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"send_response()\"");
+	if (sus_send_response(fd, &response) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
 
-	if (close(static_file_fd) == SUS_ERROR) {
+	if (close(static_file_fd) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 
-	fre_res(&response);
+	sus_fre_res(&response);
 	return SUS_OK;
 }
 
-static int kgo_response(int fd, const request_t *request)
+static int sus_kgo_response(int fd, const request_t *request)
 {
 #define LINUX_MAX_PATHLEN 4096
+	int ret;
 	char fs_path[LINUX_MAX_PATHLEN];
+
 	memset(fs_path, 0, LINUX_MAX_PATHLEN);
 
-	if (create_fspath(fs_path, request) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"create_fspath()\"");
+	if (sus_create_fspath(fs_path, request) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
-
+	
 #ifdef DEBUG
 	fprintf(stdout, "fs_path: %s\n", fs_path);
 #endif
 
-	if (!file_exists(fs_path)) {
-		if (send_response_error(fd, HTTP_NOT_FOUND) == SUS_ERROR) {
-			sus_log_error(LEVEL_PANIC, "Failed \"send_response_error()\"");
-		}
+	if (!sus_file_exists(fs_path)) {
+		sus_send_response_error(fd, HTTP_NOT_FOUND);
 		return SUS_OK;
 	}
 
-	/* TODO here some checks, if only headers must be send, etc. */
-	/* TODO fill here general response_t fields, like server, date etc. */
-
 	if (request->cgi) {
-		if (run_cgi(fd, request, fs_path) == SUS_ERROR) {
-			/* TODO look for global var sus_errno and send client an error */
-		}
+		ret = sus_run_cgi(fd, request, fs_path);
 	}
 	else {
-		if (run_static(fd, request, fs_path) == SUS_ERROR) {
-			/* TODO look for global var sus_errno and send client an error */
-		}
+		ret = sus_run_static(fd, request, fs_path);
+	}
+
+	if (ret == SUS_ERROR) {
+		sus_send_response_error(fd, sus_errno);
 	}
 
 	return SUS_OK;
 }
 
-static int success_callback(int fd, char *buf, int rc)
+static int sus_success_callback(int fd, char *buf, int rc)
 {
 #define URI_MAXLEN 257
-	/* NOTE this function will be called on successfull read client's request */
 	request_t request;
 	int ret;
 
 	memset(&request, 0, sizeof(request_t));
 
-	ret = parse_request(buf, &request);
+	ret = sus_parse_request(buf, &request);
 	if (ret == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"parse_request()\"");
 		goto error;
 	}
 
 #if 1
-	dump_request(&request); // dumps request to screen with DEBUG
+	sus_dump_request(&request); // dumps request to screen with DEBUG
 #endif
-	log_access(&request, rc); // dumps request to access.log without DEBUG
+	sus_log_access(&request, rc); // dumps request to access.log without DEBUG
 
-	/* TODO Prepare response */
-	if (kgo_response(fd, &request) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"handle_request()\"");
+	if (sus_kgo_response(fd, &request) == SUS_ERROR) {
 		goto error;
 	}
 
-	fre_req(&request);
+	sus_fre_req(&request);
 	return SUS_OK;
 error:
-	fre_req(&request);
+	sus_fre_req(&request);
 	return SUS_ERROR;
 }
 
-static int disconnect_callback(int *fd)
+static int sus_disconnect_callback(int *fd)
 {
 #ifdef DEBUG
 	fprintf(stdout, "%d disconnected\n", *fd);
 #endif
-	query_disconnect(fd);
+	sus_query_disconnect(fd);
 	return SUS_OK;
 }
 
-static void cycle_cons(
+static int sus_error_callback(int fd)
+{
+	sus_log_error(LEVEL_PANIC, "Failed to read fd %d: %s", fd, strerror(errno));
+	return SUS_OK;
+}
+
+static void sus_cycle_cons(
 		int (*fd_error)(int fd),
 		int (*fd_success)(int fd, char *buf, int rc),
 		int (*fd_disconnected)(int *fd))
@@ -358,7 +336,7 @@ static void cycle_cons(
 	for (i = LISTEN_FD+1; i < n; i++) {
 		if (fds[i].revents & POLLIN) {
 			/* NOTE can read fd and handle it */
-			rc = read_clientfd(fds[i].fd, buf, WORKER_BUFSIZE);
+			rc = sus_read_clientfd(fds[i].fd, buf, WORKER_BUFSIZE);
 
 			switch (rc) {
 				case SUS_ERROR:
@@ -374,26 +352,24 @@ static void cycle_cons(
 			}
 		} else if (fds[i].revents & POLLERR) {
 			sus_log_error(LEVEL_PANIC, "Socket %d received POLLERR", fds[i].fd);
-			query_disconnect(&fds[i].fd);
+			sus_query_disconnect(&fds[i].fd);
 			client_disconnected = 1;
-		} else if (!(fds[i].revents & POLLIN)) {
-			/* No data for fds[i].fd after poll(): TODO disconnect it */
 		}
 	}
 
 	if (client_disconnected) {
 		client_disconnected = 0;
-		align_fds();
+		sus_align_fds();
 	}
 }
 
-static void start_worker(int bridge_fd, void *data) 
+static void sus_start_worker(int bridge_fd, void *data) 
 {
-	signal(SIGINT, set_signal);
-	addfd_fds(bridge_fd);
+	signal(SIGINT, sus_set_signal);
+	sus_addfd_fds(bridge_fd);
 
 	int n;
-	int timeout = get_config_polltimeout();
+	int timeout = sus_get_config_polltimeout();
 	
 	for ( ;; ) {
 		n = poll(fds, nfds, timeout);
@@ -404,18 +380,17 @@ static void start_worker(int bridge_fd, void *data)
 				exit(1);
 			} goto signals; /* got EINTR */
 		case 0:
-			/* timeout
-			 * TODO close fds that didn't have data, expect bridge_fd */
+			/* timeout */
 			continue;
 		}
 
 		if (fds[LISTEN_FD].revents & POLLIN) {
 			/* worker can recvmsg from the bridge */
-			process_bridge_data(fds[LISTEN_FD].fd);
+			sus_process_bridge_data(fds[LISTEN_FD].fd);
 		}
 
 		if (nfds > 1) {
-			cycle_cons(error_callback, success_callback, disconnect_callback);
+			sus_cycle_cons(sus_error_callback, sus_success_callback, sus_disconnect_callback);
 		}
 
 signals:
@@ -433,14 +408,14 @@ signals:
 	exit(SUS_OK);
 }
 
-int init_workers()
+int sus_init_workers()
 {
-	int i;
-
-	workerslen = get_config_workers();
+	int i, workerslen;
+	process_t worker_proc;
+	
+	workerslen = sus_get_config_workers();
 	for (i = 0; i < workerslen; i++) {
-		process_t worker_proc = create_process(start_worker, NULL);
-		if (worker_proc.pid == INVALID_PID) {
+		if (sus_create_process(&worker_proc, sus_start_worker, NULL) == SUS_ERROR) {
 			return SUS_ERROR;
 		}
 		workers[i] = worker_proc;

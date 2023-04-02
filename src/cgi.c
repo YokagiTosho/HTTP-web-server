@@ -1,6 +1,7 @@
 #include "cgi.h"
 
-void execute_cgi(int fd, void *data)
+
+void sus_execute_cgi(int fd, void *data)
 {
 	struct cgi_data *cgi_data = (struct cgi_data *) data;
 
@@ -8,7 +9,12 @@ void execute_cgi(int fd, void *data)
 	fprintf(stderr, "from run_cgi: %s\n", cgi_data->fs_path);
 #endif
 
-	// NOTE use setnev, instead making array of ENV variables
+	/* NOTE use setnev, instead making array of ENV variables */
+	/* TODO prepare ENV from request */
 
-	exit(0);
+	if (execl(cgi_data->fs_path, cgi_data->fs_path, (char *) NULL) == -1) {
+		sus_log_error(LEVEL_PANIC, "Failed \"execl()\": %s", strerror(errno));
+		exit(1);
+	}
+	exit(1);
 }

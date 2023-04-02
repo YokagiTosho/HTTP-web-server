@@ -3,12 +3,13 @@
 
 #include "base.h"
 
+#include "request.h"
+
 struct cgi_data {
 	const char *fs_path;
-	char **env;
-	int envlen;
+	const request_t *request;
 };
 
-void execute_cgi(int fd, void *data);
+void sus_execute_cgi(int fd, void *data);
 
 #endif

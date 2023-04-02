@@ -21,6 +21,6 @@
 extern process_t workers[MAX_WORKERS];
 extern int workerslen;
 
-int init_workers();
+int sus_init_workers();
 
 #endif

@@ -8,7 +8,7 @@
 #include "log.h"
 
 static int SIGINT_RECV, SIGHUP_RECV, SIGCHLD_RECV;
-static void handle_signal(int sig)
+static void sus_handle_signal(int sig)
 {
 	switch (sig) {
 	case SIGINT:
@@ -29,7 +29,7 @@ static void handle_signal(int sig)
 
 static process_t bridge;
 
-static int kill_processes_sig(int sig)
+static int sus_kill_processes_sig(int sig)
 {
 	if (kill(bridge.pid, sig) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed kill(): %s", strerror(errno));
@@ -44,14 +44,14 @@ static int kill_processes_sig(int sig)
 	return SUS_OK;
 }
 
-static int process_signal()
+static int sus_process_signal()
 {
 	int wstatus;
 	pid_t pid;
 
 	if (SIGINT_RECV) {
 		SIGINT_RECV = 0;
-		kill_processes_sig(SIGINT);
+		sus_kill_processes_sig(SIGINT);
 		return TERMINATE;
 	}
 	else if (SIGHUP_RECV) {
@@ -76,6 +76,8 @@ static int process_signal()
 #ifdef DEBUG
 				fprintf(stdout, "waited %d bridge\n", pid);
 #endif
+				sus_log_error(LEVEL_PANIC, "Bridge died, terminating whole server");
+				exit(1);
 			}
 		}
 	}
@@ -87,22 +89,22 @@ int main(int argc, char **argv)
 	int ret;
 
 	close(STDIN_FILENO);
-	redir_stream("error.log", STDERR_FILENO);
+	sus_redir_stream("error.log", STDERR_FILENO);
 #ifndef DEBUG
-	redir_stream("access.log", STDOUT_FILENO);
+	sus_redir_stream("access.log", STDOUT_FILENO);
 #endif
 
-	if (parse_config() == SUS_ERROR) {
+	if (sus_parse_config() == SUS_ERROR) {
 		exit(1);
 	}
 	
 
-	if (init_workers() == SUS_ERROR) {
+	if (sus_init_workers() == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed init_workers()");
 		exit(1);
 	}
 
-	if (init_bridge(&bridge) == SUS_ERROR) {
+	if (sus_init_bridge(&bridge) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed init_workers()");
 		exit(1);
 	}
@@ -115,9 +117,9 @@ int main(int argc, char **argv)
 	sigaddset(&set, SIGHUP);
 	sigaddset(&set, SIGCHLD);
 
-	signal(SIGINT, handle_signal);
-	signal(SIGHUP, handle_signal);
-	signal(SIGCHLD, handle_signal);
+	signal(SIGINT, sus_handle_signal);
+	signal(SIGHUP, sus_handle_signal);
+	signal(SIGCHLD, sus_handle_signal);
 
 	if (sigprocmask(SIG_SETMASK, &set, &old) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed at sigprocmask in main proc: %s", strerror(errno));
@@ -126,7 +128,7 @@ int main(int argc, char **argv)
 
 	for ( ;; ) {
 		sigsuspend(&old);
-		ret = process_signal();
+		ret = sus_process_signal();
 		switch (ret) {
 			case SUS_ERROR:
 				sus_log_error(LEVEL_PANIC, "Failed process_signal()");

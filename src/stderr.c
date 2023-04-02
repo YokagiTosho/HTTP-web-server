@@ -1,6 +1,6 @@
 #include "stderr.h"
 
-static int redir_fd(int fd1, int fd2)
+static int sus_redir_fd(int fd1, int fd2)
 {
 	if (dup2(fd1, fd2) == -1) {
 		fprintf(stderr, "Failed \"dup2()\" %d to %d: %s\n", fd1, fd2, strerror(errno));
@@ -11,7 +11,7 @@ static int redir_fd(int fd1, int fd2)
 	return 0;
 }
 
-static int open_wronly_file(const char *path)
+static int sus_open_wronly_file(const char *path)
 {
 	int fd = open(path, O_CREAT | O_APPEND | O_WRONLY, 0666);
 	if (fd == -1) {
@@ -22,10 +22,10 @@ static int open_wronly_file(const char *path)
 	return fd;
 }
 
-int redir_stream(const char *log_path, int stream_fd)
+int sus_redir_stream(const char *log_path, int stream_fd)
 {
-	int fd = open_wronly_file(log_path);
-	redir_fd(fd, stream_fd);
+	int fd = sus_open_wronly_file(log_path);
+	sus_redir_fd(fd, stream_fd);
 
 	return 0;
 }

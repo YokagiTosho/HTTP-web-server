@@ -5,6 +5,6 @@
 
 #include "http.h"
 
-const char *get_html_error(int code);
+const char *sus_get_html_error(int code);
 
 #endif

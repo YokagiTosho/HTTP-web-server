@@ -3,7 +3,7 @@
 #include "BW_protocol.h"
 
 static int SIGINT_RECV, SIGHUP_RECV, SIGCHLD_RECV;
-static void handle_signal(int sig)
+static void sus_handle_signal(int sig)
 {
 	switch (sig) {
 	case SIGINT:
@@ -20,14 +20,18 @@ static void handle_signal(int sig)
 	}
 }
 
-static void bridge_run(int main_fd, void *data);
+static void sus_bridge_run(int main_fd, void *data);
 
-int init_bridge(process_t *proc)
+int sus_init_bridge(process_t *proc)
 {
-	*proc = create_process(bridge_run, NULL);
+	if (sus_create_process(proc, sus_bridge_run, NULL) == SUS_ERROR) {
+		return SUS_ERROR;
+	}
+#if 0
 	if (proc->pid == INVALID_PID) {
 		return SUS_ERROR;
 	}
+#endif
 	return SUS_OK;
 }
 
@@ -66,7 +70,7 @@ static const worker_t *find_free_worker(const a_workers_t *workers)
 }
 #endif
 
-static int fdacchndl(int fd)
+static int sus_fdacchndl(int fd)
 {
 	/* fdacchndl accepts new client socket and sends it to available worker.
 	 * In this case sending only to workers[0].
@@ -75,6 +79,7 @@ static int fdacchndl(int fd)
 	const process_t *process = &workers[0];
 	if ((new_socket = accept(fd, NULL, NULL)) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed accept(): %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 
@@ -82,13 +87,14 @@ static int fdacchndl(int fd)
 	ch.cmd = WORKER_RECV_FD;
 	ch.socket = new_socket;
 
-	if (send_fd(process->channel[0], &ch, sizeof(channel_t)) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed send_fd(): %s", strerror(errno));
+	if (sus_send_fd(process->channel[0], &ch, sizeof(channel_t)) == SUS_ERROR) {
+		//sus_log_error(LEVEL_PANIC, "Failed send_fd(): %s", strerror(errno));
 		return SUS_ERROR;
 	}
 
 	if (close(new_socket)) {
 		sus_log_error(LEVEL_PANIC, "Failed close() in 'fdacchndl': %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 
@@ -99,14 +105,14 @@ static int fdacchndl(int fd)
  * and send them to workers, with a little bit of communication for sync. 
  * That's it, no more - no less. 
  */
-static void bridge_run(int main_fd, void *data)
+static void sus_bridge_run(int main_fd, void *data)
 {
-	signal(SIGINT, handle_signal);
+	signal(SIGINT, sus_handle_signal);
 
 	int i, n, server_fd, nfds;
 	struct pollfd fds[MAX_WORKERS]; 
 	
-	if ((server_fd = server_fd_init()) == SUS_ERROR) {
+	if ((server_fd = sus_server_fd_init()) == SUS_ERROR) {
 		exit(1);
 	}
 	
@@ -140,7 +146,7 @@ static void bridge_run(int main_fd, void *data)
 
 		if (fds[0].revents & POLLIN) {
 			/* NOTE can read server socket */
-			fdacchndl(fds[0].fd);
+			sus_fdacchndl(fds[0].fd);
 		}
 		else if (fds[1].revents & POLLIN) {
 			/* NOTE parent proc socket 
@@ -170,8 +176,17 @@ signals:
 		}
 	}
 
-	close(server_fd);
-	close(main_fd);
+	if (close(server_fd) == -1) {
+		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
+		exit(1);
+	}
+
+	if (close(main_fd) == -1) {
+		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
+		exit(1);
+	}
 
 	exit(0);
 }

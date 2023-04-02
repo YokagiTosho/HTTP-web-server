@@ -13,22 +13,22 @@ char *CONFIG_KEYS[] = {
 	"DefaultHtml", "DefaultCgi", NULL,
 };
 
-int get_config_addr()
+int sus_get_config_addr()
 {
 	return CONFIG.ip;
 }
 
-short get_config_port()
+short sus_get_config_port()
 {
 	return CONFIG.port;
 }
 
-int get_config_workers()
+int sus_get_config_workers()
 {
 	return CONFIG.workers;
 }
 
-int get_config_polltimeout()
+int sus_get_config_polltimeout()
 {
 	return CONFIG.poll_timeout;
 }
@@ -36,32 +36,32 @@ int get_config_polltimeout()
 #define RETURN_CONFIG_STR(FIELD, DEFAULT) \
 	do { if (CONFIG.FIELD[0]) return CONFIG.FIELD; return DEFAULT; } while (0)
 
-const char *get_config_basedir()
+const char *sus_get_config_basedir()
 {
 	RETURN_CONFIG_STR(base_dir, NULL);
 }
 
-const char *get_config_cgidir()
+const char *sus_get_config_cgidir()
 {
 	RETURN_CONFIG_STR(cgi_dir, "/cgi-bin/");
 }
 
-const char *get_config_cgifile()
+const char *sus_get_config_cgifile()
 {
 	RETURN_CONFIG_STR(cgi_file, ".cgi");
 }
 
-const char *get_config_default_html()
+const char *sus_get_config_default_html()
 {
 	RETURN_CONFIG_STR(default_html, "index.html");
 }
 
-const char *get_config_default_cgi()
+const char *sus_get_config_default_cgi()
 {
 	RETURN_CONFIG_STR(default_cgi, "index.cgi");
 }
 
-static config_options_t get_option(const char *key)
+static config_options_t sus_get_option(const char *key)
 {
 	int i;
 	for (i = 0; CONFIG_KEYS[i] != NULL; i++) {
@@ -72,7 +72,7 @@ static config_options_t get_option(const char *key)
 	return -1;
 }
 
-static int parse_line(const char *line, size_t linelen)
+static int sus_parse_line(const char *line, size_t linelen)
 {
 	char *p, key[128], value[128];
 	int keylen, vallen;
@@ -91,7 +91,7 @@ static int parse_line(const char *line, size_t linelen)
 	strncpy(value, line+keylen+1, vallen);
 	value[vallen] = '\0';
 
-	option = get_option(key);
+	option = sus_get_option(key);
 	switch (option) {
 		case config_addr:
 			if (inet_pton(AF_INET, value, &CONFIG.ip) == -1) {
@@ -161,7 +161,7 @@ static int parse_line(const char *line, size_t linelen)
 	return SUS_OK;
 }
 
-int parse_config()
+int sus_parse_config()
 {
 	char line[256];
 	int linen = 0, linelen;
@@ -180,7 +180,7 @@ int parse_config()
 		linelen = strlen(line);
 		line[--linelen] = 0;
 
-		if (parse_line(line, linelen) == SUS_ERROR) {
+		if (sus_parse_line(line, linelen) == SUS_ERROR) {
 #ifdef DEBUG
 			fprintf(stdout, "Error on line %d\n", linen);
 #endif
@@ -189,5 +189,11 @@ int parse_config()
 		}
 		linen++;
 	}
+
+	if (!CONFIG.base_dir[0]) {
+		sus_log_error(LEVEL_PANIC, "BaseDir was not specified in config");
+		return SUS_ERROR;
+	}
+
 	return SUS_OK;
 }

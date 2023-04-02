@@ -35,12 +35,12 @@ typedef struct {
 	int chunking_handle;
 } response_t;
 
-int response_from_fd(int fd, response_t *response);
-int set_default_headers(response_t *response);
+int sus_response_from_fd(int fd, response_t *response);
+int sus_set_default_headers(response_t *response);
 
-int send_response(int fd, response_t *request);
-int send_response_error(int fd, int status);
+int sus_send_response(int fd, response_t *request);
+int sus_send_response_error(int fd, int status);
 
-void fre_res(response_t *response);
+void sus_fre_res(response_t *response);
 
 #endif

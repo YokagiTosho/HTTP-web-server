@@ -1,6 +1,6 @@
 #include "io.h"
 
-int send_fd(int s, channel_t *channel, int size)
+int sus_send_fd(int s, channel_t *channel, int size)
 {
 	int n;
 	struct iovec iov[1];
@@ -37,15 +37,17 @@ int send_fd(int s, channel_t *channel, int size)
 	n = sendmsg(s, &msg, 0);
 	if (n == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed \"sendmsg()\": %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	} else if (n == 0) {
 		sus_log_error(LEVEL_PANIC, "Got 0 in \"sendmsg()\"");
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 	return SUS_OK;
 }
 
-int recv_fd(int s, channel_t *channel, int size)
+int sus_recv_fd(int s, channel_t *channel, int size)
 {
 	int n;
 	struct iovec iov[1];
@@ -69,24 +71,26 @@ int recv_fd(int s, channel_t *channel, int size)
 
 	n = recvmsg(s, &msg, 0);
 	if (n == -1) {
-		/* TODO */
 		sus_log_error(LEVEL_PANIC, "Failed \"recvmsg()\" returned -1: %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 	else if (n == 0) {
-		/* TODO */
 		sus_log_error(LEVEL_PANIC, "Failed \"recvmsg()\" returned 0: %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 
 	if (msg.msg_controllen != CONTROLLEN) {
 		sus_log_error(LEVEL_PANIC, "msg.msg_controllen != CONTROLLEN");
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 
 	if (channel->cmd == WORKER_RECV_FD) {
 		if (cmsg.cm.cmsg_len < CMSG_LEN(sizeof(int))) {
 			sus_log_error(LEVEL_PANIC, "Ancillary data wrong size");
+			sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 			return SUS_ERROR;
 		}
 		channel->socket = *(int *) CMSG_DATA(&cmsg.cm);

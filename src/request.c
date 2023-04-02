@@ -5,7 +5,7 @@
 #define HTTP_METHODLEN 12
 #define HDRLEN 256
 
-static int get_hdr_type(const char *hdrtype) 
+static int sus_get_hdr_type(const char *hdrtype) 
 {
 	if (strcmp(hdrtype, "Accept-Language") == 0) {
 		return hdr_accept_language;
@@ -31,7 +31,7 @@ static int get_hdr_type(const char *hdrtype)
 	return hdr_undefined;
 }
 
-static int get_http_method(const char *method)
+static int sus_get_http_method(const char *method)
 {
 	if (strcmp(method, "GET") == 0) {
 		return HTTP_GET;
@@ -46,30 +46,35 @@ static int get_http_method(const char *method)
 	} else if (strcmp(method, "UPDATE") == 0) {
 		return HTTP_UPDATE;
 	}
+
+	sus_log_error(LEVEL_PANIC, "Unsupported HTTP method: %s", method);
+	sus_set_errno(HTTP_BAD_REQUEST);
 	return SUS_ERROR;
 }
 
-static int get_http_version(const char *http_version)
+static int sus_get_http_version(const char *http_version)
 {
 	if (strcmp(http_version, "HTTP/1.1") == 0) {
 		return HTTP_VERSION1_1;
 	}
+	sus_log_error(LEVEL_PANIC, "HTTP version not supported: %s", http_version);
+	sus_set_errno(HTTP_VERSION_NOT_SUPPORTED);
 	return SUS_ERROR;
 }
 
-static int end_of_headers(const char *s)
+static int sus_end_of_headers(const char *s)
 {
 	return s[0] == '\r' && s[1] == '\n';
 }
 
-static int get_next_header(char **req, char *hdr, int size)
+static int sus_get_next_header(char **req, char *hdr, int size)
 {
 	/* NOTE maybe return pointer to next chunk of request, instead of changing */
 	int i;
 	char hdr_type[32];
 	char *s = *req;
 
-	if (end_of_headers(s)) {
+	if (sus_end_of_headers(s)) {
 		*req += 2;
 		return 0;
 	}
@@ -78,6 +83,8 @@ static int get_next_header(char **req, char *hdr, int size)
 		hdr_type[i] = s[i];
 	}
 	if (size <= 0) {
+		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
+		sus_set_errno(HTTP_URI_TOO_LONG);
 		return SUS_ERROR;
 	}
 	hdr_type[i] = '\0';
@@ -85,12 +92,14 @@ static int get_next_header(char **req, char *hdr, int size)
 	if (s[i] == ':') {
 		i++;
 	} else {
-		return -1;
+		sus_set_errno(HTTP_BAD_REQUEST);
+		return SUS_ERROR;
 	}
 	if (s[i] == ' ') {
 		i++;
 	} else {
-		return -1;
+		sus_set_errno(HTTP_BAD_REQUEST);
+		return SUS_ERROR;
 	}
 
 	for (; s[i] != '\r' && s[i] != '\n' && size; i++, size--) {
@@ -98,16 +107,18 @@ static int get_next_header(char **req, char *hdr, int size)
 		hdr++;
 	}
 	if (size <= 0) {
+		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
+		sus_set_errno(HTTP_URI_TOO_LONG);
 		return SUS_ERROR;
 	}
 	*hdr = '\0';
 
 	*req += i+2;
 
-	return get_hdr_type(hdr_type);
+	return sus_get_hdr_type(hdr_type);
 }
 
-static int parse_request_version(char **req, char *version, int size)
+static int sus_parse_request_version(char **req, char *version, int size)
 {
 	int i;
 	char *r = *req;
@@ -115,16 +126,18 @@ static int parse_request_version(char **req, char *version, int size)
 		version[i] = r[i];
 	}
 	if (size <= 0) {
+		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
+		sus_set_errno(HTTP_URI_TOO_LONG);
 		return SUS_ERROR;
 	}
 	version[i] = '\0';
 
 	*req = r+i+2;
 
-	return 0;
+	return SUS_OK;
 }
 
-static int parse_request_method(char **req, char *method, int size)
+static int sus_parse_request_method(char **req, char *method, int size)
 {
 	int i;
 	char *r = *req;
@@ -132,15 +145,18 @@ static int parse_request_method(char **req, char *method, int size)
 		method[i] = r[i];
 	}
 	if (size <= 0) {
+		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
+		sus_set_errno(HTTP_URI_TOO_LONG);
 		return SUS_ERROR;
 	}
 	method[i] = '\0';
 
 	*req = r+i+1;
-	return 0;
+
+	return SUS_OK;
 }
 
-static int parse_request_uri(char **req, char *uri, int size)
+static int sus_parse_request_uri(char **req, char *uri, int size)
 {
 	int i;
 	char *r = *req;
@@ -148,6 +164,8 @@ static int parse_request_uri(char **req, char *uri, int size)
 		uri[i] = r[i];
 	}
 	if (size <= 0) {
+		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
+		sus_set_errno(HTTP_URI_TOO_LONG);
 		return SUS_ERROR; /* NOTE URI too long */
 	}
 	uri[i] = '\0';
@@ -156,10 +174,10 @@ static int parse_request_uri(char **req, char *uri, int size)
 	return 0;
 }
 
-static int is_cgi(const char *uri)
+static int sus_is_cgi(const char *uri)
 {
 	int i, len1, len2;
-	const char *cgi_dir = get_config_cgidir();
+	const char *cgi_dir = sus_get_config_cgidir();
 #if 0
 	if (!cgi_dir) {
 		cgi_dir = "/cgi-bin/";
@@ -182,7 +200,7 @@ static int is_cgi(const char *uri)
 	return 1;
 }
 
-int parse_request(char *rawreq, request_t *s_req)
+int sus_parse_request(char *rawreq, request_t *s_req)
 {
 	/* TODO validate that server is working with valid HTTP request.
 	 * It can be easily broken with message like aaaaaa\r\n, no ':' found, thus infinite loop */
@@ -196,36 +214,39 @@ int parse_request(char *rawreq, request_t *s_req)
 	}
 
 	/* METHOD */
-	ret = parse_request_method(&req, method, HTTP_METHODLEN);
+	ret = sus_parse_request_method(&req, method, HTTP_METHODLEN);
 	if (ret == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"request_method()\"");
 		return SUS_ERROR;
 	}
-	s_req->method = get_http_method(method);
+	s_req->method = sus_get_http_method(method);
 	if (s_req->method == SUS_ERROR) {
 		return SUS_ERROR;
 	}
 
 	/* URI */
-	ret = parse_request_uri(&req, uri, URI_MAXLEN);
+	ret = sus_parse_request_uri(&req, uri, URI_MAXLEN);
 	if (ret == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"request_uri()\"");
 		return SUS_ERROR;
 	}
-	// NOTE validating URI so it does not contain ".."
+	MLC_CPY(s_req->uri, uri);
+
+#if 0
 	if (strstr(uri, "..")) {
+		sus_log_error(LEVEL_PANIC, "'..' found in URI");
+		sus_set_errno(HTTP_BAD_REQUEST);
 		return SUS_ERROR;
 	} else {
 		MLC_CPY(s_req->uri, uri);
 	}
+#endif
 
 	/* VERSION */
-	ret = parse_request_version(&req, http_version, HTTP_VERSIONLEN);
+	ret = sus_parse_request_version(&req, http_version, HTTP_VERSIONLEN);
 	if (ret == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"request_version()\"");
 		return SUS_ERROR;
 	}
-	s_req->http_version = get_http_version(http_version);
+
+	s_req->http_version = sus_get_http_version(http_version);
 	if (s_req->http_version == SUS_ERROR) {
 		return SUS_ERROR;
 	}
@@ -234,7 +255,7 @@ int parse_request(char *rawreq, request_t *s_req)
 	g = 1;
 	while (g) {
 		char hdr_value[HDRLEN];
-		ret = get_next_header(&req, hdr_value, HDRLEN);
+		ret = sus_get_next_header(&req, hdr_value, HDRLEN);
 		switch (ret) {
 			case SUS_ERROR:
 				/* TODO error */
@@ -286,7 +307,7 @@ int parse_request(char *rawreq, request_t *s_req)
 	if (!strchr(s_req->uri, '.')) {
 		s_req->dir = 1;
 	}
-	if (is_cgi(s_req->uri)) {
+	if (sus_is_cgi(s_req->uri)) {
 #ifdef DEBUG
 		fprintf(stdout, "IS CGI\n");
 #endif
@@ -300,7 +321,7 @@ int parse_request(char *rawreq, request_t *s_req)
 	return SUS_OK;
 }
 
-void dump_request(const request_t *request)
+void sus_dump_request(const request_t *request)
 {
 #ifdef DEBUG
 	fprintf(stdout,
@@ -331,7 +352,7 @@ void dump_request(const request_t *request)
 #endif
 }
 
-int log_access(const request_t *request, int sz)
+int sus_log_access(const request_t *request, int sz)
 {
 #ifndef DEBUG
 	time_t now = time(0);
@@ -347,7 +368,7 @@ int log_access(const request_t *request, int sz)
 	return SUS_OK;
 }
 
-void fre_req(request_t *request)
+void sus_fre_req(request_t *request)
 {
 #define FRE_NNUL(FIELD) \
 	do { \

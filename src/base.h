@@ -21,6 +21,8 @@
 #include <sys/stat.h>
 
 #include "log.h" // NOTE included here to not include this file in every header
+#include "sus_errno.h"
+#include "http.h"
 
 #define PARENT_FD 1
 #define CHILD_FD  0

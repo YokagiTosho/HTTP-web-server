@@ -85,10 +85,10 @@
 #define HTTP_NOT_EXTENDED 510
 #define HTTP_NETWORK_AUTHENTICATION_REQUIRED 511
 
-const char *http_method_to_str(int http_method);
-const char *http_version_to_str(int http_version);
-const char *set_verbose(int status_code);
-int get_content_type(const char *filepath);
-const char *content_type_to_str(int content_type);
+const char *sus_http_method_to_str(int http_method);
+const char *sus_http_version_to_str(int http_version);
+const char *sus_set_verbose(int status_code);
+int sus_get_content_type(const char *filepath);
+const char *sus_content_type_to_str(int content_type);
 
 #endif

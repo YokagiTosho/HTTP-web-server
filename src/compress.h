@@ -9,6 +9,6 @@
 #define DEFLATE 2
 #define BR      4
 
-int compress_data(char *dat, int *dat_size, int compression_type);
+int sus_compress_data(char *dat, int *dat_size, int compression_type);
 
 #endif

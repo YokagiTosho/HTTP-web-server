@@ -1,6 +1,6 @@
 #include "http.h"
 
-const char *http_method_to_str(int http_method)
+const char *sus_http_method_to_str(int http_method)
 {
 	switch (http_method) {
 		case HTTP_GET:     return "GET";
@@ -15,16 +15,16 @@ const char *http_method_to_str(int http_method)
 	return "NULL";
 }
 
-const char *http_version_to_str(int http_version)
+const char *sus_http_version_to_str(int http_version)
 {
 	switch (http_version) {
-		case HTTP_VERSION1_1: return "HTTP/1.1";
-		default:     return "UNDEFINED HTTP VERSION";
+		case HTTP_VERSION1_1:
+			return "HTTP/1.1";
 	}
-	return "NULL";
+	return "UNDEFINED HTTP VERSION";
 }
 
-int get_content_type(const char *filepath)
+int sus_get_content_type(const char *filepath)
 {
 	char *p;
 	
@@ -61,7 +61,7 @@ int get_content_type(const char *filepath)
 	return SUS_ERROR;
 }
 
-const char *content_type_to_str(int content_type)
+const char *sus_content_type_to_str(int content_type)
 {
 	switch (content_type) {
 		case TEXT_PLAIN:             return "text/plain";
@@ -81,7 +81,7 @@ const char *content_type_to_str(int content_type)
 	return NULL;
 }
 
-const char *set_verbose(int status_code)
+const char *sus_set_verbose(int status_code)
 {
 #define SET_VERBOSE(STR) return STR
 	switch (status_code) {

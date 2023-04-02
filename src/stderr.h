@@ -3,6 +3,6 @@
 
 #include "base.h"
 
-int redir_stream(const char *log_path, int stream_fd);
+int sus_redir_stream(const char *log_path, int stream_fd);
 
 #endif

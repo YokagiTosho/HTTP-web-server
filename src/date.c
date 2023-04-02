@@ -1,6 +1,6 @@
 #include "date.h"
 
-static const char *mon_str(int mon) {
+static const char *sus_mon_str(int mon) {
 	const char *s = NULL;
 	switch (mon) {
 		case 0:
@@ -43,7 +43,7 @@ static const char *mon_str(int mon) {
 	return s;
 }
 
-static const char *day_of_week_str(int dow)
+static const char *sus_day_of_week_str(int dow)
 {
 	const char *s = NULL;
 	switch (dow) {
@@ -72,7 +72,7 @@ static const char *day_of_week_str(int dow)
 	return s;
 }
 
-char *http_gmtime(time_t _time)
+char *sus_http_gmtime(time_t _time)
 {
 #define DATEBUF_LEN 128
 	struct tm *tm = gmtime(&_time);
@@ -84,9 +84,9 @@ char *http_gmtime(time_t _time)
 
 	// (Day of week), (day of month) (month) (year) (hour):(min):(sec) GMT
 	snprintf(datebuf, DATEBUF_LEN, "%s, %.2d %s %d %.2d:%.2d:%.2d GMT",
-			day_of_week_str(tm->tm_wday),
+			sus_day_of_week_str(tm->tm_wday),
 			tm->tm_mday,
-			mon_str(tm->tm_mon),
+			sus_mon_str(tm->tm_mon),
 			1900+tm->tm_year,
 			tm->tm_hour,
 			tm->tm_min,

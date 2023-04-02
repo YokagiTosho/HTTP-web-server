@@ -13,7 +13,15 @@ struct raw_response {
 	int content_length;
 };
 
-static int response_add_str(char *dest, int *offset, const char *fmt, ...)
+static int sus_response_set_status(response_t *response, int status_code)
+{
+	response->status_code = status_code;
+	response->verbose = sus_set_verbose(response->status_code);
+
+	return SUS_OK;
+}
+
+static int sus_response_add_str(char *dest, int *offset, const char *fmt, ...)
 {
 	int ret;
 	va_list va;
@@ -32,25 +40,25 @@ static int response_add_str(char *dest, int *offset, const char *fmt, ...)
 	return SUS_OK;
 }
 
-int set_default_headers(response_t *response)
+int sus_set_default_headers(response_t *response)
 {
 	response->server = "SUS/0.1";
 	response->http_version = HTTP_VERSION1_1;
 	//response->connection = "keep-alive";
-	response->date = http_gmtime(time(0));
+	response->date = sus_http_gmtime(time(0));
 
 	return SUS_OK;
 }
 
 
-static int response_set_raw_hdrs(struct raw_response *raw, const response_t *response)
+static int sus_response_set_raw_hdrs(struct raw_response *raw, const response_t *response)
 {
 	int size = 0;
 
 	char *http_raw = raw->bytes;
 	
-	response_add_str(http_raw, &size, "%s %d %s\r\n",
-			http_version_to_str(response->http_version),
+	sus_response_add_str(http_raw, &size, "%s %d %s\r\n",
+			sus_http_version_to_str(response->http_version),
 			response->status_code,
 			response->verbose);
 
@@ -58,39 +66,39 @@ static int response_set_raw_hdrs(struct raw_response *raw, const response_t *res
 	//fprintf(stdout, "raw->stline_length: %d\n", raw->stline_length);
 
 	if (response->content_length > 0) {
-		response_add_str(http_raw, &size, "Content-Length: %d\r\n", response->content_length);
+		sus_response_add_str(http_raw, &size, "Content-Length: %d\r\n", response->content_length);
 	}
 	if (response->connection) {
-		response_add_str(http_raw, &size, "Connection: %s\r\n", response->connection);
+		sus_response_add_str(http_raw, &size, "Connection: %s\r\n", response->connection);
 	}
 	if (response->content_type != SUS_ERROR) {
-		response_add_str(http_raw, &size, "Content-Type: %s\r\n", content_type_to_str(response->content_type));
+		sus_response_add_str(http_raw, &size, "Content-Type: %s\r\n", sus_content_type_to_str(response->content_type));
 	}
 	if (response->content_language) {
-		response_add_str(http_raw, &size, "Content-Language: %s\r\n", response->content_language);
+		sus_response_add_str(http_raw, &size, "Content-Language: %s\r\n", response->content_language);
 	}
 	if (response->location) {
-		response_add_str(http_raw, &size, "Location: %s\r\n", response->location);
+		sus_response_add_str(http_raw, &size, "Location: %s\r\n", response->location);
 	}
 	if (response->set_cookie) {
-		response_add_str(http_raw, &size, "Set-Cookie: %s\r\n", response->set_cookie);
+		sus_response_add_str(http_raw, &size, "Set-Cookie: %s\r\n", response->set_cookie);
 	}
 	if (response->content_encoding) {
-		response_add_str(http_raw, &size, "Content-Encoding: %s\r\n", response->content_encoding);
+		sus_response_add_str(http_raw, &size, "Content-Encoding: %s\r\n", response->content_encoding);
 	}
 	if (response->transfer_encoding) {
-		response_add_str(http_raw, &size, "Transfer-Encoding: %s\r\n", response->transfer_encoding);
+		sus_response_add_str(http_raw, &size, "Transfer-Encoding: %s\r\n", response->transfer_encoding);
 	}
 	if (response->date) {
-		response_add_str(http_raw, &size, "Date: %s\r\n", response->date);
+		sus_response_add_str(http_raw, &size, "Date: %s\r\n", response->date);
 	}
 	if (response->last_modified) {
-		response_add_str(http_raw, &size, "Last-Modified: %s\r\n", response->last_modified);
+		sus_response_add_str(http_raw, &size, "Last-Modified: %s\r\n", response->last_modified);
 	}
 	if (response->server) {
-		response_add_str(http_raw, &size, "Server: %s\r\n", response->server);
+		sus_response_add_str(http_raw, &size, "Server: %s\r\n", response->server);
 	}
-	response_add_str(http_raw, &size, "\r\n"); // end of headers
+	sus_response_add_str(http_raw, &size, "\r\n"); // end of headers
 
 	raw->headers_length = size - raw->stline_length;
 	//fprintf(stdout, "raw->headers_length: %d\n", raw->headers_length);
@@ -98,7 +106,7 @@ static int response_set_raw_hdrs(struct raw_response *raw, const response_t *res
 	return size;
 }
 
-static int response_set_raw_body(struct raw_response *raw, const response_t *response)
+static int sus_response_set_raw_body(struct raw_response *raw, const response_t *response)
 {
 	int offset = raw->stline_length + raw->headers_length;
 	int size = response->content_length;
@@ -110,31 +118,32 @@ static int response_set_raw_body(struct raw_response *raw, const response_t *res
 			//fprintf(stdout, "raw->content_length: %d\n", raw->content_length);
 		} else {
 			sus_log_error(LEVEL_PANIC, "response->content_length <= 0 in \"response_to_raw()\"");
+			sus_errno = HTTP_INTERNAL_SERVER_ERROR;
 			return SUS_ERROR;
 		}
 	} else {
 		sus_log_error(LEVEL_PANIC, "response->body is NULL in \"response_to_raw()\"");
+		sus_errno = HTTP_INTERNAL_SERVER_ERROR;
 		return SUS_ERROR;
 	}
 
 	return SUS_OK;
 }
 
-static int response_to_raw(struct raw_response *raw, const response_t *response)
+static int sus_response_to_raw(struct raw_response *raw, const response_t *response)
 {
 	/* Used to make raw bytes from response to send over network */
 
-	/* TODO after Memory Pool is implemented, allocate there, instead of malloc */
 	raw->bytes = malloc(BUFLEN);
 	if (!raw->bytes) {
 		sus_log_error(LEVEL_PANIC, "Failed to alloc mem for raw->bytes");
-		exit(0);
+		exit(1);
 	}
 	
-	response_set_raw_hdrs(raw, response);
+	sus_response_set_raw_hdrs(raw, response);
 
 	if (!response->chunked) {
-		response_set_raw_body(raw, response);
+		sus_response_set_raw_body(raw, response);
 	}
 
 	raw->size = raw->stline_length + raw->headers_length + raw->content_length;
@@ -143,7 +152,7 @@ static int response_to_raw(struct raw_response *raw, const response_t *response)
 	return SUS_OK;
 }
 
-static int send_chunked(int fd, const response_t *response)
+static int sus_send_chunked(int fd, const response_t *response)
 {
 	// TODO error check
 	int ret;
@@ -166,7 +175,7 @@ static int send_chunked(int fd, const response_t *response)
 	return SUS_OK;
 }
 
-static int send_headers(int fd, const struct raw_response *raw)
+static int sus_send_headers(int fd, const struct raw_response *raw)
 {
 	int ret;
 	int size = raw->stline_length+raw->headers_length;
@@ -174,13 +183,14 @@ static int send_headers(int fd, const struct raw_response *raw)
 	ret = write(fd, raw->bytes, size);
 	if (ret != size || ret == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed to write headers: %s", strerror(errno));
+		sus_errno = HTTP_INTERNAL_SERVER_ERROR;
 		return SUS_ERROR;
 	}
 
 	return SUS_OK;
 }
 
-static int send_body(int fd, const struct raw_response *raw)
+static int sus_send_body(int fd, const struct raw_response *raw)
 {
 	int ret;
 	int offset = raw->stline_length + raw->headers_length;
@@ -189,17 +199,17 @@ static int send_body(int fd, const struct raw_response *raw)
 	ret = write(fd, raw->bytes+offset, size);
 	if (ret != size || ret == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed to write body: %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 
 	return SUS_OK;
 }
 
-static int response_compress(response_t *response)
+static int sus_response_compress(response_t *response)
 {
 	if (response->supported_encodings & GZIP) {
-		if (compress_data((char *)response->body, &response->content_length, GZIP) == SUS_ERROR) {
-			sus_log_error(LEVEL_PANIC, "Failed \"compress_data()\"");
+		if (sus_compress_data((char *)response->body, &response->content_length, GZIP) == SUS_ERROR) {
 			return SUS_ERROR;
 		}
 		response->content_encoding = "gzip";
@@ -207,7 +217,7 @@ static int response_compress(response_t *response)
 	return SUS_OK;
 }
 
-int send_response(int fd, response_t *response)
+int sus_send_response(int fd, response_t *response)
 {
 	struct raw_response raw = {
 		.bytes          = NULL,
@@ -217,14 +227,12 @@ int send_response(int fd, response_t *response)
 	};
 
 	if (response->do_compress) {
-		if (response_compress(response) == SUS_ERROR) {
-			sus_log_error(LEVEL_PANIC, "Failed \"response_compress()\"");
+		if (sus_response_compress(response) == SUS_ERROR) {
 			goto error;
 		}
 	}
 
-	if (response_to_raw(&raw, response) == SUS_ERROR) {
-		sus_log_error(LEVEL_PANIC, "Failed \"response_to_raw()\"");
+	if (sus_response_to_raw(&raw, response) == SUS_ERROR) {
 		goto error;
 	}
 #if 0
@@ -232,17 +240,15 @@ int send_response(int fd, response_t *response)
 	fprintf(stdout, "After \"response_to_raw()\": %s", raw.bytes);
 #endif
 #endif
-	if (send_headers(fd, &raw) == SUS_ERROR) {
+	if (sus_send_headers(fd, &raw) == SUS_ERROR) {
 		goto error;
 	}
 	if (response->chunked) {
-		if (send_chunked(fd, response) == SUS_ERROR) {
-			sus_log_error(LEVEL_PANIC, "Failed \"send_chunked()\"");
+		if (sus_send_chunked(fd, response) == SUS_ERROR) {
 			goto error;
 		}
 	} else {
-		if (send_body(fd, &raw) == SUS_ERROR) {
-			sus_log_error(LEVEL_PANIC, "Failed \"send_body()\"");
+		if (sus_send_body(fd, &raw) == SUS_ERROR) {
 			goto error;
 		}
 	}
@@ -260,7 +266,7 @@ error:
 	return SUS_ERROR;
 }
 
-int send_response_error(int fd, int status)
+int sus_send_response_error(int fd, int status)
 {
 	response_t response;
 	int size;
@@ -269,12 +275,11 @@ int send_response_error(int fd, int status)
 
 	response.content_type = TEXT_HTML;
 
-	set_default_headers(&response);
+	sus_set_default_headers(&response);
 
-	response.status_code = status;
-	response.verbose = set_verbose(response.status_code);
+	sus_response_set_status(&response, status);
 
-	response.body = get_html_error(status);
+	response.body = sus_get_html_error(status);
 	if (!response.body) {
 		return SUS_ERROR;
 	}
@@ -286,16 +291,15 @@ int send_response_error(int fd, int status)
 
 	response.content_length = size;
 
-	if (send_response(fd, &response) == SUS_ERROR) {
+	if (sus_send_response(fd, &response) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
 
-	fre_res(&response);
-
+	sus_fre_res(&response);
 	return SUS_OK;
 }
 
-static int response_from_file(int fd, response_t *response, struct stat *statbuf)
+static int sus_response_from_file(int fd, response_t *response, struct stat *statbuf)
 {
 	int ret, file_size;
 
@@ -312,13 +316,8 @@ static int response_from_file(int fd, response_t *response, struct stat *statbuf
 		response->do_compress = 1;
 	}
 
-	/* TODO: maybe, after I implement Pool Of Memory(if I will be able to), instead
-	 * having separate 'buf' global variable, allocate memory in pool for response->body
-	 * and write in it.
-	 * And if an error occured, just label pool chunk as free, instead of mallocs()/frees() */
-	response->status_code   = HTTP_OK;
-	response->verbose       = set_verbose(response->status_code);
-	response->last_modified = http_gmtime(statbuf->st_mtim.tv_sec);
+	sus_response_set_status(response, HTTP_OK);
+	response->last_modified = sus_http_gmtime(statbuf->st_mtim.tv_sec);
 
 	if (!response->chunked) {
 		ret = read(fd, buf, BUFLEN);
@@ -341,19 +340,20 @@ static int response_from_file(int fd, response_t *response, struct stat *statbuf
 	return SUS_OK;
 }
 
-static int response_from_cgi(int fd, response_t *response)
+static int sus_response_from_cgi(int fd, response_t *response)
 {
 	//int ret, content_len;
 	/* TODO read for CGI output(fd), parse it, decide to chunk or not to chunk, make response */
 	return SUS_OK;
 }
 
-int response_from_fd(int fd, response_t *response)
+int sus_response_from_fd(int fd, response_t *response)
 {
 	struct stat statbuf;
 
 	if (fstat(fd, &statbuf) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed \"fstat()\": %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 
@@ -365,17 +365,18 @@ int response_from_fd(int fd, response_t *response)
 	}
 
 	if (S_ISSOCK(statbuf.st_mode)) {
-		return response_from_cgi(fd, response);
+		return sus_response_from_cgi(fd, response);
 	} else if (S_ISREG(statbuf.st_mode)) {
-		return response_from_file(fd, response, &statbuf);
+		return sus_response_from_file(fd, response, &statbuf);
 	} else {
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		sus_log_error(LEVEL_PANIC, "Undefined S_IS* in \"response_from_fd()\"");
 		return SUS_ERROR;
 	}
 	return SUS_OK;
 }
 
-void fre_res(response_t *response)
+void sus_fre_res(response_t *response)
 {
 #define FRE_NNUL(FIELD) \
 	do { \

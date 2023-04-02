@@ -33,17 +33,17 @@ typedef struct {
 } config_t;
 
 
-int parse_config();
+int sus_parse_config();
 
-int get_config_addr();
-short get_config_port();
-int get_config_workers();
-int get_config_polltimeout();
+int sus_get_config_addr();
+short sus_get_config_port();
+int sus_get_config_workers();
+int sus_get_config_polltimeout();
 
-const char *get_config_basedir();
-const char *get_config_cgidir();
-const char *get_config_cgifile();
-const char *get_config_default_html();
-const char *get_config_default_cgi();
+const char *sus_get_config_basedir();
+const char *sus_get_config_cgidir();
+const char *sus_get_config_cgifile();
+const char *sus_get_config_default_html();
+const char *sus_get_config_default_cgi();
 
 #endif

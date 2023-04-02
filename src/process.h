@@ -8,7 +8,7 @@ typedef struct {
 	int channel[2];
 } process_t;
 
-process_t create_process(void (*callback)(int fd, void *data), void *data);
-int wait_process(const process_t *process);
+int sus_create_process(process_t *proc, void (*callback)(int fd, void *data), void *data);
+int sus_wait_process(const process_t *process);
 
 #endif

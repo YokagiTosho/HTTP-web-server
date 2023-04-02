@@ -1,6 +1,7 @@
 #include "errors_html.h"
 
-static const char *bad_request = "<html> \
+static const char *bad_request =
+"<html> \
 	<head> \
 		<title>400 Bad Request</title> \
 	</head> \
@@ -12,7 +13,8 @@ static const char *bad_request = "<html> \
 	</body>\
 </html>";
 
-static const char *forbidden = "<html> \
+static const char *forbidden =
+"<html> \
 	<head> \
 		<title>403 Forbidden</title> \
 		</head> \
@@ -24,12 +26,13 @@ static const char *forbidden = "<html> \
 		</body> \
 </html>";
 
-static const char *internal_server_error = "<html> \
+static const char *internal_server_error =
+"<html> \
 	<head> \
 		<title>500 Internal Server Error</title> \
 	</head> \
 	<body> \
-		<h1>Internal Server Error</h1> \
+		<h1>500 Internal Server Error</h1> \
 		<p>The server encountered an internal error \
 		on misconfiguration \
 		and was unable \
@@ -39,7 +42,8 @@ static const char *internal_server_error = "<html> \
 	</body> \
 </html>";
 
-static const char *method_not_allowed = "<html>\
+static const char *method_not_allowed =
+"<html>\
 	<head> \
 		<title>405 Not Allowed</title> \
 	</head> \
@@ -50,7 +54,8 @@ static const char *method_not_allowed = "<html>\
 	</body> \
 </html>";
 
-static const char *not_found = "<html> \
+static const char *not_found =
+"<html> \
 	<head> \
 		<title>404 Not Found</title> \
 	</head> \
@@ -62,7 +67,8 @@ static const char *not_found = "<html> \
 	</body> \
 </html>";
 
-static const char *payload_too_large = "<html> \
+static const char *payload_too_large =
+"<html> \
 	<head> \
 		<title>413 Payload Too Large</title> \
 	</head> \
@@ -73,7 +79,8 @@ static const char *payload_too_large = "<html> \
 	</body> \
 </html>";
 
-static const char *uri_too_long = "<html> \
+static const char *uri_too_long =
+"<html> \
 	<head> \
 		<title>414 Request-URI Too Long</title> \
 	</head> \
@@ -84,7 +91,8 @@ static const char *uri_too_long = "<html> \
 	</body> \
 </html>";
 
-static const char *version_not_allowed = "<html> \
+static const char *version_not_allowed =
+"<html> \
 	<head> \
 		<title>505 Not Allowed</title> \
 	</head> \
@@ -95,7 +103,20 @@ static const char *version_not_allowed = "<html> \
 	</body> \
 </html>";
 
-const char *get_html_error(int code)
+static const char *service_unavailable =
+"<html> \
+	<head> \
+		<title>503 Service unavailable</title> \
+	</head> \
+	<body> \
+		<h1>503 Service unavailable</h1> \
+		<p>The server is temporarily unable to service your request due to maintenance downtime or capacity problems. Please, try again later.</p> \
+		<hr> \
+		<p>SUS</p> \
+	</body> \
+</html>";
+
+const char *sus_get_html_error(int code)
 {
 	switch (code) {
 		case HTTP_BAD_REQUEST:
@@ -114,6 +135,8 @@ const char *get_html_error(int code)
 			return uri_too_long;
 		case HTTP_VERSION_NOT_SUPPORTED:
 			return version_not_allowed;
+		case HTTP_SERVICE_UNAVAILABLE:
+			return service_unavailable;
 	}
 	return NULL;
 }

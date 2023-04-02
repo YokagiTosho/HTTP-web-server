@@ -17,6 +17,6 @@ typedef struct {
 #endif
 
 //http_server_t *mkserver();
-int server_fd_init();
+int sus_server_fd_init();
 
 #endif

@@ -3,6 +3,6 @@
 
 #include "base.h"
 
-char *http_gmtime(time_t _time);
+char *sus_http_gmtime(time_t _time);
 
 #endif

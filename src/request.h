@@ -48,9 +48,9 @@ typedef struct http_request {
 	//unsigned allowed_methods_only:1;
 } request_t;
 
-int parse_request(char *req, request_t *s_req);
-void dump_request(const request_t *request);
-int log_access(const request_t *request, int sz);
-void fre_req(request_t *request);
+int sus_parse_request(char *req, request_t *s_req);
+void sus_dump_request(const request_t *request);
+int sus_log_access(const request_t *request, int sz);
+void sus_fre_req(request_t *request);
 
 #endif
