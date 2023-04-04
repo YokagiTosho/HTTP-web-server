@@ -84,6 +84,8 @@ static int sus_process_signal()
 	return SUS_OK;
 }
 
+#include "response.h"
+
 int main(int argc, char **argv)
 {
 	int ret;

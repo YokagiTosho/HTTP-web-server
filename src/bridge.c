@@ -27,11 +27,6 @@ int sus_init_bridge(process_t *proc)
 	if (sus_create_process(proc, sus_bridge_run, NULL) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
-#if 0
-	if (proc->pid == INVALID_PID) {
-		return SUS_ERROR;
-	}
-#endif
 	return SUS_OK;
 }
 
@@ -83,12 +78,13 @@ static int sus_fdacchndl(int fd)
 		return SUS_ERROR;
 	}
 
+	sus_log_error(LEVEL_DEBUG, "Accepted socket: %d", new_socket);
+
 	channel_t ch;
 	ch.cmd = WORKER_RECV_FD;
 	ch.socket = new_socket;
 
 	if (sus_send_fd(process->channel[0], &ch, sizeof(channel_t)) == SUS_ERROR) {
-		//sus_log_error(LEVEL_PANIC, "Failed send_fd(): %s", strerror(errno));
 		return SUS_ERROR;
 	}
 

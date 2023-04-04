@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <time.h>
+#include <limits.h>
 
 #include <errno.h>
 
@@ -20,7 +21,7 @@
 
 #include <sys/stat.h>
 
-#include "log.h" // NOTE included here to not include this file in every header
+#include "log.h"
 #include "sus_errno.h"
 #include "http.h"
 
@@ -38,12 +39,12 @@
 #define SUS_OK           0
 #define SUS_ERROR       -1
 
-#define MAX_WORKERS     16
-#define MAX_CONNECTIONS 128
-#define REQUEST_BUFSIZE 4096
+#define MAX_WORKERS      16
+#define MAX_CONNECTIONS  128
+#define REQUEST_BUFSIZE  4096
 #define SIZE_TO_COMPRESS 1024
 
-#define DEBUG // for printf
+#define DEBUG // for printf to stdout
 
 #define MLC_CPY(dest, src) \
 	do { \

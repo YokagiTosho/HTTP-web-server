@@ -15,10 +15,8 @@ static void sus_compress_gzip_callback(int fd, void *data)
 		exit(1);
 	}
 
-	if (execlp("gzip", "gzip", "-c", NULL) == -1) {
-		sus_log_error(LEVEL_PANIC, "Failed \"execle()\": %s", strerror(errno));
-		exit(1);
-	}
+	execlp("gzip", "gzip", "-c", NULL);
+	sus_log_error(LEVEL_PANIC, "Failed \"execlp()\": %s", strerror(errno));
 	exit(1);
 }
 
@@ -52,8 +50,23 @@ static int sus_compress_gzip(char *dat, int *dat_size)
 		return SUS_ERROR;
 	}
 
-	/* TODO check return status of gzip if any error occured */
 	if ((wstatus = sus_wait_process(&process)) == SUS_ERROR) {
+		return SUS_ERROR;
+	}
+	if (WIFEXITED(wstatus)) {
+		ret = WEXITSTATUS(wstatus);
+		if (ret != 0) {
+			sus_log_error(LEVEL_PANIC, "GZIP prog returned with %d", ret);
+			sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
+			return SUS_ERROR;
+		}
+	} else if (WIFSIGNALED(wstatus)) {
+		sus_log_error(LEVEL_PANIC, "GZIP prog was killed by signal: %d", WTERMSIG(wstatus));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
+		return SUS_ERROR;
+	} else if (WIFSTOPPED(wstatus)) {
+		sus_log_error(LEVEL_PANIC, "GZIP prog was stopped by signal: %d", WSTOPSIG(wstatus));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
 
@@ -88,6 +101,7 @@ static int sus_compress_gzip(char *dat, int *dat_size)
 		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
+
 	if (close(tmp_fd) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed \"close()\" tmp_file: %s", strerror(errno));
 		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);

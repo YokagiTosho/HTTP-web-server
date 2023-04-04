@@ -7,6 +7,9 @@ static char *buf;
 int log_error(int log_level, const char *fmt, const char *srcfile, const char *funcname, int line, ...)
 {
 	/* example: [ dd:mm:yyyy ] msg \ file.c, function, line \ */
+	if (log_level == LEVEL_DEBUG) {
+		return SUS_OK;
+	}
 
 	va_list ap;
 	int ret;

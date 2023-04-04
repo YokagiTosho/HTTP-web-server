@@ -69,26 +69,30 @@ static int sus_end_of_headers(const char *s)
 
 static int sus_get_next_header(char **req, char *hdr, int size)
 {
-	/* NOTE maybe return pointer to next chunk of request, instead of changing */
+	/* NOTE maybe return pointer to next chunk of request, instead of INC */
 	int i;
-	char hdr_type[32];
+	char hdr_type[64];
 	char *s = *req;
 
 	if (sus_end_of_headers(s)) {
+		/* INC pointer by 2 to go through '\r\n' */
 		*req += 2;
 		return 0;
 	}
 
+	/* going through header key and checking it for errors */
 	for (i = 0; s[i] != ':' && size; i++, size--) {
 		hdr_type[i] = s[i];
 	}
 	if (size <= 0) {
-		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
-		sus_set_errno(HTTP_URI_TOO_LONG);
+		/* didn't find ':' */
+		sus_log_error(LEVEL_PANIC, "size <= 0: Bad request");
+		sus_set_errno(HTTP_BAD_REQUEST);
 		return SUS_ERROR;
 	}
 	hdr_type[i] = '\0';
 
+	/* skipping unwanted chars */
 	if (s[i] == ':') {
 		i++;
 	} else {
@@ -102,7 +106,8 @@ static int sus_get_next_header(char **req, char *hdr, int size)
 		return SUS_ERROR;
 	}
 
-	for (; s[i] != '\r' && s[i] != '\n' && size; i++, size--) {
+	/* header value */
+	for (; s[i] != '\r' && s[i+1] != '\n' && size; i++, size--) {
 		*hdr = s[i];
 		hdr++;
 	}
@@ -113,6 +118,7 @@ static int sus_get_next_header(char **req, char *hdr, int size)
 	}
 	*hdr = '\0';
 
+	/* get rid of '\r\n' at the end of a header */
 	*req += i+2;
 
 	return sus_get_hdr_type(hdr_type);
@@ -122,7 +128,7 @@ static int sus_parse_request_version(char **req, char *version, int size)
 {
 	int i;
 	char *r = *req;
-	for (i = 0; r[i] != '\r' && r[i] != '\n' && size; i++, size--) {
+	for (i = 0; r[i] != '\r' && r[i+1] != '\n' && size; i++, size--) {
 		version[i] = r[i];
 	}
 	if (size <= 0) {

@@ -2,11 +2,7 @@
 
 int sus_create_process(process_t *proc, void (*run)(int fd, void *data), void *data)
 {
-	//process_t proc;
 	pid_t pid;
-
-	/*proc.channel[0] = INVALID_SOCKET;
-	proc.channel[1] = INVALID_SOCKET;*/
 
 	proc->channel[0] = INVALID_SOCKET;
 	proc->channel[1] = INVALID_SOCKET;
@@ -17,6 +13,12 @@ int sus_create_process(process_t *proc, void (*run)(int fd, void *data), void *d
 		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
+
+	/* NOTE making UNIX sockets non-blocking because otherwise it won't work with CGI.
+	 * And the rest I don't care: in other ways there's 'poll()' used */
+	//fcntl(proc->channel[0], F_SETFL, O_NONBLOCK);
+	fcntl(proc->channel[1], F_SETFL, O_NONBLOCK);
+
 #if 0
 #ifdef DEBUG
 	fprintf(stdout, "after socketpair: %d-%d\n", proc.channel[0], proc.channel[1]);
@@ -50,11 +52,13 @@ int sus_create_process(process_t *proc, void (*run)(int fd, void *data), void *d
 	}
 	proc->pid = pid;
 	proc->channel[1] = INVALID_SOCKET;
+
 #if 1
 #ifdef DEBUG
 	fprintf(stdout, "Created proc %d\n", proc->pid);
 #endif
 #endif
+
 	return SUS_OK;
 }
 

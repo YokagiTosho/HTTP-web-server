@@ -24,9 +24,12 @@ const char *sus_http_version_to_str(int http_version)
 	return "UNDEFINED HTTP VERSION";
 }
 
+
+
 int sus_get_content_type(const char *filepath)
 {
 	char *p;
+	int typ;
 	
 	p = strchr(filepath, '.');
 	if (!p) {
@@ -34,6 +37,7 @@ int sus_get_content_type(const char *filepath)
 	}
 
 	p++;
+#if 0
 	if (!strcmp(p, "json")) {
 		return APPLICATION_JSON;
 	}
@@ -58,7 +62,9 @@ int sus_get_content_type(const char *filepath)
 	else if (!strcmp(p, "png")) {
 		return IMAGE_PNG;
 	}
-	return SUS_ERROR;
+#endif
+	CONTENT_TYPE_FROM_STR(typ, p);
+	return typ;
 }
 
 const char *sus_content_type_to_str(int content_type)

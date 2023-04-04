@@ -235,14 +235,13 @@ int sus_send_response(int fd, response_t *response)
 	if (sus_response_to_raw(&raw, response) == SUS_ERROR) {
 		goto error;
 	}
-#if 0
-#ifdef DEBUG
-	fprintf(stdout, "After \"response_to_raw()\": %s", raw.bytes);
-#endif
-#endif
+
+	/* send headers first */
 	if (sus_send_headers(fd, &raw) == SUS_ERROR) {
 		goto error;
 	}
+
+	/* send response body */
 	if (response->chunked) {
 		if (sus_send_chunked(fd, response) == SUS_ERROR) {
 			goto error;
@@ -340,11 +339,123 @@ static int sus_response_from_file(int fd, response_t *response, struct stat *sta
 	return SUS_OK;
 }
 
-static int sus_response_from_cgi(int fd, response_t *response)
+int sus_response_from_cgi(int fd, response_t *response)
 {
-	//int ret, content_len;
-	/* TODO read for CGI output(fd), parse it, decide to chunk or not to chunk, make response */
-	return SUS_OK;
+#define CGI_LINEBUF_LEN 512
+	int ret, keylen, thereis_body, buflen_rem;
+	char lbuf[CGI_LINEBUF_LEN], *s;
+
+	if (dup2(fd, STDIN_FILENO) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed \"dup2()\": %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
+		goto error;
+	}
+
+	while (fgets(lbuf, CGI_LINEBUF_LEN, stdin)) {
+		s = strchr(lbuf, '\n');
+		if (!s) {
+			goto error;
+		}
+		if (lbuf[0] == '\n') {
+			thereis_body = 1;
+			break;
+		}
+
+		/* Get rid of new-line in buf */
+		*s = '\0';
+
+		s = strchr(lbuf, ':');
+		if (!s) {
+			sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
+			goto error;
+		}
+		/* determine length of key */
+		keylen = s-lbuf;
+
+		/* Advance s to point to start of the value */
+		s++;
+		if (*s == ' ') {
+			s++;
+		}
+
+		if (!strncmp("Content-Type", lbuf, keylen)) {
+			if (!strcmp("text/plain", s)) {
+				response->content_type = TEXT_PLAIN;
+			} else if (!strcmp("text/css", s)) {
+				response->content_type = TEXT_CSS;
+			} else if (!strcmp("text/csv", s)) {
+				response->content_type = TEXT_CSV;
+			} else if (!strcmp("text/html", s)) {
+				response->content_type = TEXT_HTML;
+			} else if (!strcmp("text/xml", s)) {
+				response->content_type = TEXT_XML;
+			} else if (!strcmp("image/jpeg", s)) {
+				response->content_type = IMAGE_JPEG;
+			} else if (!strcmp("image/png", s)) {
+				response->content_type = IMAGE_PNG;
+			} else if (!strcmp("application/javascript", s)) {
+				response->content_type = APPLICATION_JAVASCRIPT;
+			} else if (!strcmp("application/json", s)) {
+				response->content_type = APPLICATION_JSON;
+			} else if (!strcmp("application/xml", s)) {
+				response->content_type = APPLICATION_XML;
+			}
+		} else if (!strncmp("Status", lbuf, keylen)) { 
+			CONVERT_TO_INT(response->status_code, s);
+			sus_response_set_status(response, response->status_code);
+		} else if (!strncmp("Content-Length", lbuf, keylen)) {
+			CONVERT_TO_INT(response->content_length, s);
+		} else if (!strncmp("Location", lbuf, keylen)) {
+			MLC_CPY(response->location, s);
+		}
+		/* TODO the rest of headers */
+	}
+
+	/* read into global buf memory */
+	if (thereis_body) {
+		if (response->content_length > BUFLEN) {
+			response->chunked = 1;
+			response->chunking_handle = fd;
+		} else if (response->content_length > 0) {
+			ret = read(fd, buf, BUFLEN); 
+			switch (ret) {
+				case -1:
+					sus_log_error(LEVEL_PANIC, "Failed \"read()\": %s", strerror(errno));
+					sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
+					goto error;
+				case 0:
+					/* NOTE no body, but response->content_length > 0 */
+					sus_log_error(LEVEL_PANIC, "No body, but response->content_length > 0");
+					sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
+					goto error;
+			}
+		} else {
+			/* TODO read here CGI body */
+			buflen_rem = BUFLEN;
+
+			for (s = buf, ret = 0; fgets(s, buflen_rem, stdin) && buflen_rem > 0; ) {
+				ret = strlen(s);
+
+				response->content_length += ret;
+				s += ret;
+
+				buflen_rem -= ret;
+			}
+			response->body = buf;
+			*(s-1) = '\0';
+		}
+	} else {
+		/* CGI hasn't produced content */
+		sus_log_error(LEVEL_PANIC, "CGI didn't produce content");
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
+		goto error;
+	}
+
+	close(STDIN_FILENO);
+	return (SUS_OK);
+error:
+	close(STDIN_FILENO);
+	return (SUS_ERROR);
 }
 
 int sus_response_from_fd(int fd, response_t *response)

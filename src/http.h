@@ -91,4 +91,35 @@ const char *sus_set_verbose(int status_code);
 int sus_get_content_type(const char *filepath);
 const char *sus_content_type_to_str(int content_type);
 
+#define CONTENT_TYPE_FROM_STR(DEST, STR) \
+	do { \
+		if (!strcmp(p, "json")) { \
+			DEST = APPLICATION_JSON; \
+		} \
+		else if (!strcmp(p, "js")) { \
+			DEST = APPLICATION_JAVASCRIPT; \
+		} \
+		else if (!strcmp(p, "html")) { \
+			DEST = TEXT_HTML; \
+		} \
+		else if (!strcmp(p, "css")) { \
+			DEST = TEXT_CSS; \
+		} \
+		else if (!strcmp(p, "csv")) { \
+			DEST = TEXT_CSV; \
+		} \
+		else if (!strcmp(p, "xml")) { \
+			DEST = TEXT_XML; \
+		} \
+		else if (!strcmp(p, "jpeg") || !strcmp(p, "jpg")) { \
+			DEST = IMAGE_JPEG; \
+		} \
+		else if (!strcmp(p, "png")) { \
+			DEST = IMAGE_PNG; \
+		} \
+		else { \
+			DEST = SUS_ERROR; \
+		} \
+	} while (0)
+
 #endif
