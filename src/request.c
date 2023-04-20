@@ -184,11 +184,6 @@ static int sus_is_cgi(const char *uri)
 {
 	int i, len1, len2;
 	const char *cgi_dir = sus_get_config_cgidir();
-#if 0
-	if (!cgi_dir) {
-		cgi_dir = "/cgi-bin/";
-	}
-#endif
 
 	len1 = strlen(cgi_dir);
 	len2 = strlen(uri);
@@ -235,16 +230,6 @@ int sus_parse_request(char *rawreq, request_t *s_req)
 		return SUS_ERROR;
 	}
 	MLC_CPY(s_req->uri, uri);
-
-#if 0
-	if (strstr(uri, "..")) {
-		sus_log_error(LEVEL_PANIC, "'..' found in URI");
-		sus_set_errno(HTTP_BAD_REQUEST);
-		return SUS_ERROR;
-	} else {
-		MLC_CPY(s_req->uri, uri);
-	}
-#endif
 
 	/* VERSION */
 	ret = sus_parse_request_version(&req, http_version, HTTP_VERSIONLEN);
@@ -313,15 +298,11 @@ int sus_parse_request(char *rawreq, request_t *s_req)
 	if (!strchr(s_req->uri, '.')) {
 		s_req->dir = 1;
 	}
-	if (sus_is_cgi(s_req->uri)) {
-#ifdef DEBUG
-		fprintf(stdout, "IS CGI\n");
-#endif
-		s_req->cgi = 1;
-	}
-
 	if (strchr(s_req->uri, '?')) {
 		s_req->args = 1;
+	}
+	if (sus_is_cgi(s_req->uri)) {
+		s_req->cgi = 1;
 	}
 
 	return SUS_OK;

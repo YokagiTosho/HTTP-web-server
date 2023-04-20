@@ -35,9 +35,9 @@
 #define SERVER_SOCKET     0
 #define CONNECTIONS_INDEX 1
 
-#define SUS_DISCONNECTED 0
-#define SUS_OK           0
-#define SUS_ERROR       -1
+#define SUS_OK            0
+#define SUS_ERROR        -1
+#define SUS_DISCONNECTED -2
 
 #define MAX_WORKERS      16
 #define MAX_CONNECTIONS  128

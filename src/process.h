@@ -10,5 +10,6 @@ typedef struct {
 
 int sus_create_process(process_t *proc, void (*callback)(int fd, void *data), void *data);
 int sus_wait_process(const process_t *process);
+int sus_close_process(process_t *process);
 
 #endif

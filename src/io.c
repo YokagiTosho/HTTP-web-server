@@ -76,9 +76,8 @@ int sus_recv_fd(int s, channel_t *channel, int size)
 		return SUS_ERROR;
 	}
 	else if (n == 0) {
-		sus_log_error(LEVEL_PANIC, "Failed \"recvmsg()\" returned 0: %s", strerror(errno));
-		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-		return SUS_ERROR;
+		sus_log_error(LEVEL_DEBUG, "\"recvmsg()\" returned 0: \"bridge\" disconnected");
+		return SUS_DISCONNECTED; // if this happens, bridge died or stopped working
 	}
 
 	if (msg.msg_controllen != CONTROLLEN) {

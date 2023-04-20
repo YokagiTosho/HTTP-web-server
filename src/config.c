@@ -195,5 +195,6 @@ int sus_parse_config()
 		return SUS_ERROR;
 	}
 
+	fclose(config_file);
 	return SUS_OK;
 }

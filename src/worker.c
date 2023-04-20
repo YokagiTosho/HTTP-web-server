@@ -6,21 +6,24 @@ int workerslen;                 // extern
 static struct pollfd fds[MAX_CONNECTIONS];
 static int nfds;
 
-static int SIGINT_RECV, SIGHUP_RECV, SIGCHLD_RECV;
+static int SIGINT_RECV;
+static int SIGHUP_RECV;
+static int SIGCHLD_RECV;
+
 static void sus_set_signal(int sig)
 {
 	switch (sig) {
-	case SIGINT:
-		SIGINT_RECV = 1;
-		break;
-	case SIGHUP:
-		SIGHUP_RECV = 1;
-		break;
-	case SIGCHLD:
-		SIGCHLD_RECV = 1;
-		break;
-	default:
-		break;
+		case SIGINT:
+			SIGINT_RECV = 1;
+			break;
+		case SIGHUP:
+			SIGHUP_RECV = 1;
+			break;
+		case SIGCHLD:
+			SIGCHLD_RECV = 1;
+			break;
+		default:
+			break;
 	}
 }
 
@@ -73,7 +76,6 @@ static void sus_align_fds()
 			i--; // TODO maybe remove this line
 			nfds--;
 		}
-
 	}
 }
 
@@ -83,15 +85,15 @@ static int sus_process_bridge_data(int fd)
 	channel_t ch;
 
 	rc = sus_recv_fd(fd, &ch, sizeof(channel_t));
-	if (rc == SUS_ERROR) {
-		return SUS_ERROR;
+	if (rc == SUS_ERROR || rc == SUS_DISCONNECTED) {
+		return rc;
 	}
 
 	if (ch.cmd == WORKER_RECV_FD) {
 		if (sus_addfd_fds(ch.socket) == SUS_ERROR) {
 			sus_send_response_error(fd, sus_errno);
 			close(ch.socket);
-			return SUS_ERROR;
+			//return SUS_ERROR;
 		}
 	}
 	return SUS_OK;
@@ -213,11 +215,11 @@ static int sus_run_cgi(int fd, const request_t *request, const char *fs_path)
 		goto error;
 	}
 
-	close(cgi_process.channel[0]);
+	sus_close_process(&cgi_process);
 	sus_fre_res(&response);
 	return SUS_OK;
 error:
-	close(cgi_process.channel[0]);
+	sus_close_process(&cgi_process);
 	sus_fre_res(&response);
 	return SUS_ERROR;
 }
@@ -282,8 +284,10 @@ static int sus_kgo_response(int fd, const request_t *request)
 		return SUS_ERROR;
 	}
 	
+#if 0
 #ifdef DEBUG
 	fprintf(stdout, "fs_path: %s\n", fs_path);
+#endif
 #endif
 
 	if (!sus_file_exists(fs_path)) {
@@ -307,7 +311,6 @@ static int sus_kgo_response(int fd, const request_t *request)
 
 static int sus_success_callback(int fd, char *buf, int rc)
 {
-#define URI_MAXLEN 257
 	request_t request;
 	int ret;
 
@@ -318,9 +321,7 @@ static int sus_success_callback(int fd, char *buf, int rc)
 		goto error;
 	}
 
-#if 1
 	sus_dump_request(&request); // dumps request to screen with DEBUG
-#endif
 	sus_log_access(&request, rc); // dumps request to access.log without DEBUG
 
 	if (sus_kgo_response(fd, &request) == SUS_ERROR) {
@@ -391,11 +392,12 @@ static void sus_cycle_cons(
 
 static void sus_start_worker(int bridge_fd, void *data) 
 {
+	int n, ret, timeout;
+
 	signal(SIGINT, sus_set_signal);
 	sus_addfd_fds(bridge_fd);
 
-	int n;
-	int timeout = sus_get_config_polltimeout();
+	timeout = sus_get_config_polltimeout();
 	
 	for ( ;; ) {
 		n = poll(fds, nfds, timeout);
@@ -404,7 +406,8 @@ static void sus_start_worker(int bridge_fd, void *data)
 			if (errno != EINTR) {
 				sus_log_error(LEVEL_PANIC, "Failed \"poll()\" in worker: %s", strerror(errno));
 				exit(1);
-			} goto signals; /* got EINTR */
+			}
+			goto signals; /* got EINTR */
 		case 0:
 			/* timeout */
 			continue;
@@ -412,7 +415,10 @@ static void sus_start_worker(int bridge_fd, void *data)
 
 		if (fds[LISTEN_FD].revents & POLLIN) {
 			/* worker can recvmsg from the bridge */
-			sus_process_bridge_data(fds[LISTEN_FD].fd);
+			ret = sus_process_bridge_data(fds[LISTEN_FD].fd);
+			if (ret == SUS_ERROR || ret == SUS_DISCONNECTED) {
+				goto exit;
+			}
 		}
 
 		if (nfds > 1) {
@@ -431,15 +437,17 @@ signals:
 			SIGCHLD_RECV = 0;
 		}
 	}
+exit:
 	exit(SUS_OK);
 }
 
 int sus_init_workers()
 {
-	int i, workerslen;
+	int i;
 	process_t worker_proc;
 	
 	workerslen = sus_get_config_workers();
+
 	for (i = 0; i < workerslen; i++) {
 		if (sus_create_process(&worker_proc, sus_start_worker, NULL) == SUS_ERROR) {
 			return SUS_ERROR;

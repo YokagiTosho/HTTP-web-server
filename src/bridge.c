@@ -2,29 +2,31 @@
 
 #include "BW_protocol.h"
 
+process_t bridge; // extern
+
 static int SIGINT_RECV, SIGHUP_RECV, SIGCHLD_RECV;
 static void sus_handle_signal(int sig)
 {
 	switch (sig) {
-	case SIGINT:
-		SIGINT_RECV = 1;
-		break;
-	case SIGHUP:
-		SIGHUP_RECV = 1;
-		break;
-	case SIGCHLD:
-		SIGCHLD_RECV = 1;
-		break;
-	default:
-		break;
+		case SIGINT:
+			SIGINT_RECV = 1;
+			break;
+		case SIGHUP:
+			SIGHUP_RECV = 1;
+			break;
+		case SIGCHLD:
+			SIGCHLD_RECV = 1;
+			break;
+		default:
+			break;
 	}
 }
 
 static void sus_bridge_run(int main_fd, void *data);
 
-int sus_init_bridge(process_t *proc)
+int sus_init_bridge()
 {
-	if (sus_create_process(proc, sus_bridge_run, NULL) == SUS_ERROR) {
+	if (sus_create_process(&bridge, sus_bridge_run, NULL) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
 	return SUS_OK;
@@ -72,6 +74,7 @@ static int sus_fdacchndl(int fd)
 	 * TODO algorithm to determine who to send file descriptor! */
 	int new_socket;
 	const process_t *process = &workers[0];
+
 	if ((new_socket = accept(fd, NULL, NULL)) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed accept(): %s", strerror(errno));
 		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
@@ -85,11 +88,12 @@ static int sus_fdacchndl(int fd)
 	ch.socket = new_socket;
 
 	if (sus_send_fd(process->channel[0], &ch, sizeof(channel_t)) == SUS_ERROR) {
+		sus_log_error(LEVEL_PANIC, "Failed sus_send_fd(): %s", strerror(errno));
 		return SUS_ERROR;
 	}
 
-	if (close(new_socket)) {
-		sus_log_error(LEVEL_PANIC, "Failed close() in 'fdacchndl': %s", strerror(errno));
+	if (close(new_socket) == -1) {
+		sus_log_error(LEVEL_PANIC, "Failed \"close()\" in 'fdacchndl': %s", strerror(errno));
 		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
@@ -114,8 +118,8 @@ static void sus_bridge_run(int main_fd, void *data)
 	
 	nfds = workerslen+1+1; /* 1 and 1 for server->socket and main_fd respectively */
 
-	fds[0].fd = server_fd;
-	fds[0].events = POLLIN;
+	fds[LISTEN_FD].fd = server_fd;
+	fds[LISTEN_FD].events = POLLIN;
 
 	fds[1].fd = main_fd;
 	fds[1].events = POLLIN;
@@ -132,17 +136,15 @@ static void sus_bridge_run(int main_fd, void *data)
 				if (errno != EINTR) {
 					sus_log_error(LEVEL_PANIC, "Failed poll() on the bridge: %s", strerror(errno));
 					exit(1);
-				} else {
-					goto signals;
 				}
+				goto signals;
 			case 0:
 				/* timeout */
 				continue;
 		}
 
-		if (fds[0].revents & POLLIN) {
-			/* NOTE can read server socket */
-			sus_fdacchndl(fds[0].fd);
+		if (fds[LISTEN_FD].revents & POLLIN) {
+			sus_fdacchndl(fds[LISTEN_FD].fd);
 		}
 		else if (fds[1].revents & POLLIN) {
 			/* NOTE parent proc socket 
@@ -153,7 +155,6 @@ static void sus_bridge_run(int main_fd, void *data)
 		n = nfds;
 		for (i = 2; i < n; i++) {
 			if (fds[i].revents & POLLIN) {
-				/* NOTE can read worker */
 			} else if (fds[i].revents & POLLERR) {
 				sus_log_error(LEVEL_PANIC, "%d POLLERR", fds[i].fd);
 				continue;
@@ -162,7 +163,7 @@ static void sus_bridge_run(int main_fd, void *data)
 signals:
 		if (SIGINT_RECV) {
 			SIGINT_RECV = 0;
-			break;
+			goto exit;
 		}
 		if (SIGHUP_RECV) {
 			SIGHUP_RECV = 0;
@@ -171,17 +172,19 @@ signals:
 			SIGCHLD_RECV = 0;
 		}
 	}
-
+exit:
 	if (close(server_fd) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
-		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-		exit(1);
 	}
 
 	if (close(main_fd) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
-		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-		exit(1);
+	}
+
+	for (i = 0; i < workerslen; i++) {
+		if (close(workers[i].channel[0]) == -1) {
+			sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
+		}
 	}
 
 	exit(0);
