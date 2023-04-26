@@ -125,8 +125,8 @@ static int sus_create_fspath(char *fs_path, const request_t *request)
 	int s, basedir_len;
 	char *qptr;
 	const char *basedir = sus_get_config_basedir();
-
 	basedir_len = strlen(basedir);
+
 	strncpy(fs_path, basedir, basedir_len);
 
 	if (request->args) {
@@ -283,12 +283,6 @@ static int sus_kgo_response(int fd, const request_t *request)
 	if (sus_create_fspath(fs_path, request) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
-	
-#if 0
-#ifdef DEBUG
-	fprintf(stdout, "fs_path: %s\n", fs_path);
-#endif
-#endif
 
 	if (!sus_file_exists(fs_path)) {
 		sus_send_response_error(fd, HTTP_NOT_FOUND);
@@ -297,13 +291,13 @@ static int sus_kgo_response(int fd, const request_t *request)
 
 	if (request->cgi) {
 		ret = sus_run_cgi(fd, request, fs_path);
-	}
-	else {
+	} else {
 		ret = sus_run_static(fd, request, fs_path);
 	}
 
 	if (ret == SUS_ERROR && sus_errno != 0) {
 		sus_send_response_error(fd, sus_errno);
+		return SUS_ERROR;
 	}
 
 	return SUS_OK;
@@ -321,8 +315,8 @@ static int sus_success_callback(int fd, char *buf, int rc)
 		goto error;
 	}
 
-	sus_dump_request(&request); // dumps request to screen with DEBUG
-	sus_log_access(&request, rc); // dumps request to access.log without DEBUG
+	sus_dump_request(&request); // dumps request to screen with DEBUG defined
+	sus_log_access(&request, rc); // dumps request to access.log without defined DEBUG
 
 	if (sus_kgo_response(fd, &request) == SUS_ERROR) {
 		goto error;
@@ -350,10 +344,14 @@ static int sus_error_callback(int fd)
 	return SUS_OK;
 }
 
+typedef int (*PFD_ERROR)(int fd);
+typedef int (*PFD_SUCCESS)(int fd, char *buf, int rc);
+typedef int (*PFD_DISCONNECTED)(int *fd);
+
 static void sus_cycle_cons(
-		int (*fd_error)(int fd),
-		int (*fd_success)(int fd, char *buf, int rc),
-		int (*fd_disconnected)(int *fd))
+		PFD_ERROR fd_error,
+		PFD_SUCCESS fd_success,
+		PFD_DISCONNECTED fd_disconnected)
 {
 	int n, i, rc, client_disconnected;
 	char buf[REQUEST_BUFSIZE];
@@ -390,7 +388,7 @@ static void sus_cycle_cons(
 	}
 }
 
-static void sus_start_worker(int bridge_fd, void *data) 
+static void sus_start_worker(int bridge_fd, void *data)
 {
 	int n, ret, timeout;
 

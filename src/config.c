@@ -1,10 +1,15 @@
 #include "config.h"
 
+#define DEFAULT_WORKERS 1
+#define DEFAULT_TIMEOUT 10000
+#define DEFAULT_IP 0
+#define DEFAULT_PORT 8000
+
 static config_t CONFIG = {
-	.ip           = 0,
-	.port         = 8000,
-	.workers      = 1,
-	.poll_timeout = 10000,
+	.ip           = DEFAULT_IP,
+	.port         = DEFAULT_PORT,
+	.workers      = DEFAULT_WORKERS,
+	.poll_timeout = DEFAULT_TIMEOUT,
 };
 
 char *CONFIG_KEYS[] = {
@@ -114,12 +119,18 @@ static int sus_parse_line(const char *line, size_t linelen)
 			break;
 		case config_workers:
 			CONVERT_TO_INT(CONFIG.workers, value);
+			if (CONFIG.workers <= 0) {
+				CONFIG.workers = DEFAULT_WORKERS;
+			}
 #ifdef DEBUG
 			fprintf(stdout, "Workers: %d\n", CONFIG.workers);
 #endif
 			break;
 		case config_poll_timeout:
 			CONVERT_TO_INT(CONFIG.poll_timeout, value);
+			if (CONFIG.poll_timeout < 0) {
+				// TODO
+			}
 			CONFIG.poll_timeout *= 1000;
 #ifdef DEBUG
 			fprintf(stdout, "PollTimeout: %d\n", CONFIG.poll_timeout);

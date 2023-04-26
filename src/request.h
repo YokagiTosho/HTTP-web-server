@@ -42,10 +42,6 @@ typedef struct http_request {
 	unsigned cgi:1;
 	unsigned dir:1;
 	unsigned args:1;
-
-	//unsigned headers_only:1;
-	//unsigned keepalive:1;
-	//unsigned allowed_methods_only:1;
 } request_t;
 
 int sus_parse_request(char *req, request_t *s_req);

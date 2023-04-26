@@ -16,6 +16,7 @@ static void sus_compress_gzip_callback(int fd, void *data)
 	}
 
 	execlp("gzip", "gzip", "-c", NULL);
+
 	sus_log_error(LEVEL_PANIC, "Failed \"execlp()\": %s", strerror(errno));
 	exit(1);
 }

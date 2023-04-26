@@ -8,7 +8,9 @@ typedef struct {
 	int channel[2];
 } process_t;
 
-int sus_create_process(process_t *proc, void (*callback)(int fd, void *data), void *data);
+typedef void (*proc_handler)(int fd, void *data);
+
+int sus_create_process(process_t *proc, proc_handler callback, void *data);
 int sus_wait_process(const process_t *process);
 int sus_close_process(process_t *process);
 

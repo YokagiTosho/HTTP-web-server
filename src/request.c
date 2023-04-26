@@ -54,9 +54,10 @@ static int sus_get_http_method(const char *method)
 
 static int sus_get_http_version(const char *http_version)
 {
-	if (strcmp(http_version, "HTTP/1.1") == 0) {
+	if (!strcmp(http_version, "HTTP/1.1")) {
 		return HTTP_VERSION1_1;
 	}
+
 	sus_log_error(LEVEL_PANIC, "HTTP version not supported: %s", http_version);
 	sus_set_errno(HTTP_VERSION_NOT_SUPPORTED);
 	return SUS_ERROR;
@@ -166,14 +167,17 @@ static int sus_parse_request_uri(char **req, char *uri, int size)
 {
 	int i;
 	char *r = *req;
+
 	for (i = 0; r[i] != ' ' && size; i++, size--) {
 		uri[i] = r[i];
 	}
+
 	if (size <= 0) {
 		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
 		sus_set_errno(HTTP_URI_TOO_LONG);
 		return SUS_ERROR; /* NOTE URI too long */
 	}
+
 	uri[i] = '\0';
 
 	*req = r+i+1;
@@ -189,16 +193,16 @@ static int sus_is_cgi(const char *uri)
 	len2 = strlen(uri);
 
 	if (len2 < len1) {
-		return 0;
+		return FALSE;
 	}
 
 	for (i = 0; i < len1; i++) {
 		if (uri[i] != cgi_dir[i]) {
-			return 0;
+			return FALSE;
 		}
 	}
 
-	return 1;
+	return TRUE;
 }
 
 int sus_parse_request(char *rawreq, request_t *s_req)
@@ -219,6 +223,7 @@ int sus_parse_request(char *rawreq, request_t *s_req)
 	if (ret == SUS_ERROR) {
 		return SUS_ERROR;
 	}
+
 	s_req->method = sus_get_http_method(method);
 	if (s_req->method == SUS_ERROR) {
 		return SUS_ERROR;

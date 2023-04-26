@@ -12,14 +12,23 @@ CgiFile .cgi
 DefaultHtml index.html
 DefaultCgi index.cgi
 
-#Total 'heap' pool available to worker
+# File where stderr will be redirected
+#ErrorFile error.log
+
+# File where stdout will be redirected
+#Outfile out.log
+
+# File where requests will be redirected
+#AccessFile access.log
+
+# Total 'heap' pool available to worker
 #MemoryPool 4MB
 
-#InBuf used for request buffer
+# InBuf used for request buffer
 #InBuf 1MB
 
-#OutBuf used for response buffer
+# OutBuf used for response buffer
 #OutBuf 1MB
 
-#CacheBuf is used for caching error HTML pages, 'hot' static files
+# CacheBuf is used for caching error HTML pages, 'hot' static files
 #CacheBuf 512KB

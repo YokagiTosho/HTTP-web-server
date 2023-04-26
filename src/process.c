@@ -1,6 +1,6 @@
 #include "process.h"
 
-int sus_create_process(process_t *proc, void (*run)(int fd, void *data), void *data)
+int sus_create_process(process_t *proc, proc_handler run, void *data)
 {
 	pid_t pid;
 

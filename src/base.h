@@ -44,6 +44,9 @@
 #define REQUEST_BUFSIZE  4096
 #define SIZE_TO_COMPRESS 1024
 
+#define TRUE 1
+#define FALSE 0
+
 #define DEBUG // for printf to stdout
 
 #define MLC_CPY(dest, src) \

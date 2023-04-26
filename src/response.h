@@ -43,6 +43,6 @@ int sus_send_response_error(int fd, int status);
 
 void sus_fre_res(response_t *response);
 
-int sus_response_from_cgi(int fd, response_t *response);
+//int sus_response_from_cgi(int fd, response_t *response);
 
 #endif

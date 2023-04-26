@@ -39,6 +39,7 @@ static int sus_write_master_pid()
 	ret = write(filefd, pid, ret);
 	if (ret == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed to write \"%s\": %s", SUS_PID_PATH, strerror(errno));
+		close(filefd);
 		return -1;
 	}
 
@@ -60,6 +61,7 @@ static pid_t sus_read_master_pid()
 	ret = read(filefd, pid, PIDLEN);
 	if (ret == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed to read \"%s\": %s", SUS_PID_PATH, strerror(errno));
+		close(filefd);
 		return -1;
 	}
 
@@ -79,7 +81,7 @@ static int sus_delete_master_pid()
 	return ret;
 }
 
-static void sus_handle_signal(int sig)
+static void sus_signal(int sig)
 {
 	received_signal = sig;
 }
@@ -122,14 +124,13 @@ static int sus_kill_processes(int sig)
 	return SUS_OK;
 }
 
-static int sus_process_signal()
+static int sus_handle_signal()
 {
 	int wstatus, ret;
 	pid_t pid;
 
 	switch (received_signal) {
 		case SIGINT:
-			sus_kill_processes(SIGINT);
 			return SUS_TERMINATE;
 		case SIGHUP:
 			return SUS_RESTART;
@@ -142,6 +143,17 @@ static int sus_process_signal()
 			if (pid != bridge.pid) {
 				/* TODO remove awaited worker from global var 'workers' after */
 				/* worker proc */
+				if (WIFEXITED(wstatus)) {
+					ret = WEXITSTATUS(wstatus);
+					if (ret != 0) {
+						sus_log_error(LEVEL_PANIC, "Worker %d returned with %d", pid, ret);
+					}
+				} else if (WIFSIGNALED(wstatus)) {
+					sus_log_error(LEVEL_PANIC, "Worker %d was killed by signal: %d", pid, WTERMSIG(wstatus));
+				} else if (WIFSTOPPED(wstatus)) {
+					sus_log_error(LEVEL_PANIC, "Worker %d was stopped by signal: %d", pid, WSTOPSIG(wstatus));
+				}
+				/* TODO remove from workers */
 			} else {
 				/* bridge proc */
 				if (WIFEXITED(wstatus)) {
@@ -179,10 +191,14 @@ static void sus_parse_args(int argc, char **argv)
 	if (argc > 1) {
 		pid_t master_pid = sus_read_master_pid();
 		if (master_pid == -1) {
+#ifdef DEBUG
 			fprintf(stderr, "SUS server is not running\n");
+#endif
 			exit(1);
 		} else if (master_pid <= 0) {
+#ifdef DEBUG
 			fprintf(stderr, "Read invalid master PID: %d\n", master_pid);
+#endif
 			exit(1);
 		}
 		if (!strcmp("stop", argv[1])) {
@@ -190,16 +206,34 @@ static void sus_parse_args(int argc, char **argv)
 		} else if (!strcmp("restart", argv[1])) {
 			kill(master_pid, SIGHUP);
 		} else {
+#ifdef DEBUG
 			fprintf(stderr, "Unrecognized option: %s\n", argv[1]);
+#endif
 			exit(1);
 		}
 		exit(0);
 	}
 }
 
+static void sus_init_heap()
+{
+#if 0
+#define HEAP_SIZE 1024*1024*8
+	void *ptr = malloc(HEAP_SIZE);
+	if (!ptr) {
+		sus_log_error(LEVEL_PANIC, "Could not allocate memory");
+		exit(1);
+	}
+	free(ptr);
+	ptr = NULL;
+#endif
+}
+
 int main(int argc, char **argv)
 {
 	int ret;
+
+	sus_init_heap();
 
 	sus_parse_args(argc, argv);
 
@@ -211,6 +245,11 @@ int main(int argc, char **argv)
 	sus_redir_stream("access.log", STDOUT_FILENO);
 #endif
 
+
+	/* TODO remove restart label and make 'sus_parse_config' very first call.
+	 * In signal handling just call 'sus_parse_config' again and goto 'sus_init_workers'
+	 * This is because redirection of streams happens before config parsing, it should not be this way
+	 * */
 restart:
 	if (sus_parse_config() == SUS_ERROR) {
 		exit(1);
@@ -233,9 +272,9 @@ restart:
 	sigaddset(&set, SIGHUP);
 	sigaddset(&set, SIGCHLD);
 
-	signal(SIGINT, sus_handle_signal);
-	signal(SIGHUP, sus_handle_signal);
-	signal(SIGCHLD, sus_handle_signal);
+	signal(SIGINT, sus_signal);
+	signal(SIGHUP, sus_signal);
+	signal(SIGCHLD, sus_signal);
 
 	if (sigprocmask(SIG_SETMASK, &set, &old) == -1) {
 		sus_log_error(LEVEL_PANIC, "Failed at \"sigprocmask()\" in main proc: %s", strerror(errno));
@@ -245,15 +284,17 @@ restart:
 	for ( ;; ) {
 		sigsuspend(&old);
 
-		ret = sus_process_signal();
+		ret = sus_handle_signal();
 		switch (ret) {
 			case SUS_ERROR:
 				sus_log_error(LEVEL_PANIC, "Failed \"process_signal()\"");
 				goto exit;
 			case SUS_TERMINATE:
+				sus_kill_processes(SIGINT);
 				goto exit;
 			case SUS_RESTART:
-				if (sus_restart_server() == SUS_ERROR) {
+				ret = sus_restart_server();
+				if (ret == SUS_ERROR) {
 					goto exit;
 				}
 				goto restart;
