@@ -1,6 +1,6 @@
 CC=gcc
 
-flags=-Wall
+flags=-Wall -g
 
 src=src/*.c
 

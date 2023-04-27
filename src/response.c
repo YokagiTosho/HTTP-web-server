@@ -42,9 +42,8 @@ static int sus_response_add_str(char *dest, int *offset, const char *fmt, ...)
 
 int sus_set_default_headers(response_t *response)
 {
-	response->server = "SUS/0.1";
+	response->server = SUS_VERSION;
 	response->http_version = HTTP_VERSION1_1;
-	//response->connection = "keep-alive";
 	response->date = sus_http_gmtime(time(0));
 
 	return SUS_OK;
@@ -339,7 +338,7 @@ static int sus_response_from_file(int fd, response_t *response, struct stat *sta
 	return SUS_OK;
 }
 
-int sus_response_from_cgi(int fd, response_t *response)
+static int sus_response_from_cgi(int fd, response_t *response)
 {
 #define CGI_LINEBUF_LEN 512
 	int ret, keylen, thereis_body, buflen_rem;
@@ -434,6 +433,8 @@ int sus_response_from_cgi(int fd, response_t *response)
 			buflen_rem = BUFLEN;
 
 			for (s = buf, ret = 0; fgets(s, buflen_rem, stdin) && buflen_rem > 0; ) {
+				/* read into memory location starting from 's',
+				 * then move 's' pointer to the next starting location */
 				ret = strlen(s);
 
 				response->content_length += ret;
@@ -502,7 +503,6 @@ void sus_fre_res(response_t *response)
 	FRE_NNUL(set_cookie);
 	FRE_NNUL(last_modified);
 	FRE_NNUL(date);
-	//FRE_NNUL(body);
 
 	response->content_encoding = NULL;
 	response->transfer_encoding = NULL;
@@ -511,6 +511,5 @@ void sus_fre_res(response_t *response)
 	response->body = NULL;
 	response->connection = NULL;
 
-	//memset(buf, 0, BUFLEN);
 	response->chunking_handle = -1;
 }

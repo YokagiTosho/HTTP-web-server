@@ -95,6 +95,7 @@ static int sus_process_bridge_data(int fd)
 			close(ch.socket);
 			//return SUS_ERROR;
 		}
+		fprintf(stdout, "Accepted %d socket\n", ch.socket);
 	}
 	return SUS_OK;
 }
@@ -120,167 +121,13 @@ static int sus_file_exists(const char *filepath)
 	return access(filepath, F_OK | R_OK) != -1;
 }
 
-static int sus_create_fspath(char *fs_path, const request_t *request)
-{
-	int s, basedir_len;
-	char *qptr;
-	const char *basedir = sus_get_config_basedir();
-	basedir_len = strlen(basedir);
-
-	strncpy(fs_path, basedir, basedir_len);
-
-	if (request->args) {
-		qptr = strchr(request->uri, '?');
-		if (!qptr) { 
-			/* should not ever happen */
-			sus_log_error(LEVEL_PANIC, "p == NULL should not never happen");
-			sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-			return SUS_ERROR;
-		}
-		s = (int)(qptr - request->uri);
-		strncat(fs_path, request->uri, s);
-		//fprintf(stdout, "fs_path in request->args: %s\n", fs_path);
-	} else {
-		strcat(fs_path, request->uri);
-	}
-
-	if (request->dir && !request->cgi) {
-		strcat(fs_path, sus_get_config_default_html());
-	} else if (request->dir && request->cgi){
-		strcat(fs_path, sus_get_config_default_cgi());
-	}
-
-	return SUS_OK;
-}
-
-static int sus_run_cgi(int fd, const request_t *request, const char *fs_path)
-{
-	/* Runs CGI script, parses its output, makes response and sends it to fd */
-	process_t cgi_process;
-	response_t response;
-	struct cgi_data data;
-	int wstatus, size, ret;
-
-	memset(&response, 0, sizeof(response_t));
-
-	cgi_process.pid = INVALID_PID;
-	cgi_process.channel[0] = INVALID_SOCKET;
-	cgi_process.channel[1] = INVALID_SOCKET;
-
-	data.fs_path = fs_path;
-	data.request = request;
-
-	sus_set_default_headers(&response);
-
-	if (sus_create_process(&cgi_process, sus_execute_cgi, &data) == SUS_ERROR) {
-		return SUS_ERROR;
-	}
-
-	size = request->content_length;
-	if (size > 0) {
-		/* NOTE write POST data to CGI script */
-		if (write(cgi_process.channel[0], request->request_body, size) == SUS_ERROR) {
-			sus_log_error(LEVEL_PANIC, "Failed \"write()\": %s", strerror(errno));
-			sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-			return SUS_ERROR;
-		}
-	}
-
-	if ((wstatus = sus_wait_process(&cgi_process)) == SUS_ERROR) {
-		return SUS_ERROR;
-	}
-
-	if (WIFEXITED(wstatus)) {
-		ret = WEXITSTATUS(wstatus);
-		if (ret != 0) {
-			sus_log_error(LEVEL_PANIC, "CGI script returned with %d", ret);
-			sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-			return SUS_ERROR;
-		}
-	} else if (WIFSIGNALED(wstatus)) {
-		sus_log_error(LEVEL_PANIC, "CGI script was killed by signal: %d", WTERMSIG(wstatus));
-		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-		return SUS_ERROR;
-	} else if (WIFSTOPPED(wstatus)) {
-		sus_log_error(LEVEL_PANIC, "CGI script was stopped by signal: %d", WSTOPSIG(wstatus));
-		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-		return SUS_ERROR;
-	}
-
-	if (sus_response_from_fd(cgi_process.channel[0], &response) == SUS_ERROR) {
-		goto error;
-	}
-
-	if (sus_send_response(fd, &response) == SUS_ERROR) {
-		goto error;
-	}
-
-	sus_close_process(&cgi_process);
-	sus_fre_res(&response);
-	return SUS_OK;
-error:
-	sus_close_process(&cgi_process);
-	sus_fre_res(&response);
-	return SUS_ERROR;
-}
-
-static int sus_run_static(int fd, const request_t *request, const char *fs_path)
-{
-	int static_file_fd;
-	response_t response;
-
-	memset(&response, 0, sizeof(response_t));
-
-	response.content_type = sus_get_content_type(fs_path); 
-
-	if (request->accept_encoding) {
-		if (strstr(request->accept_encoding, "gzip")) {
-			response.supported_encodings |= GZIP;
-		}
-		if (strstr(request->accept_encoding, "deflate")) {
-			response.supported_encodings |= DEFLATE;
-		}
-		if (strstr(request->accept_encoding, "br")) {
-			response.supported_encodings |= BR;
-		}
-	}
-
-	sus_set_default_headers(&response);
-
-	static_file_fd = open(fs_path, O_RDONLY);
-	if (static_file_fd == -1) {
-		sus_log_error(LEVEL_PANIC, "Failed \"open()\" %s: %s", fs_path, strerror(errno));
-		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-		return SUS_ERROR;
-	}
-
-	if (sus_response_from_fd(static_file_fd, &response) == SUS_ERROR) {
-		return SUS_ERROR;
-	}
-
-	if (sus_send_response(fd, &response) == SUS_ERROR) {
-		return SUS_ERROR;
-	}
-
-	if (close(static_file_fd) == -1) {
-		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
-		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-		return SUS_ERROR;
-	}
-
-	sus_fre_res(&response);
-	return SUS_OK;
-}
-
 static int sus_kgo_response(int fd, const request_t *request)
 {
-#define LINUX_MAX_PATHLEN 4096
 	int ret;
-	char fs_path[LINUX_MAX_PATHLEN];
+	const char *fs_path;
 
-	memset(fs_path, 0, LINUX_MAX_PATHLEN);
-
-	if (sus_create_fspath(fs_path, request) == SUS_ERROR) {
+	fs_path = sus_get_fspath();
+	if (!fs_path) {
 		return SUS_ERROR;
 	}
 
@@ -290,9 +137,9 @@ static int sus_kgo_response(int fd, const request_t *request)
 	}
 
 	if (request->cgi) {
-		ret = sus_run_cgi(fd, request, fs_path);
+		ret = sus_run_cgi(fd, request);
 	} else {
-		ret = sus_run_static(fd, request, fs_path);
+		ret = sus_run_static(fd, request);
 	}
 
 	if (ret == SUS_ERROR && sus_errno != 0) {
@@ -315,10 +162,18 @@ static int sus_success_callback(int fd, char *buf, int rc)
 		goto error;
 	}
 
+#if 0
 	sus_dump_request(&request); // dumps request to screen with DEBUG defined
+#endif
 	sus_log_access(&request, rc); // dumps request to access.log without defined DEBUG
+	
+	ret = sus_create_fspath(&request);
+	if (ret == SUS_ERROR) {
+		return SUS_ERROR;
+	}
 
-	if (sus_kgo_response(fd, &request) == SUS_ERROR) {
+	ret = sus_kgo_response(fd, &request);
+	if (ret == SUS_ERROR) {
 		goto error;
 	}
 

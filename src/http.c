@@ -24,8 +24,6 @@ const char *sus_http_version_to_str(int http_version)
 	return "UNDEFINED HTTP VERSION";
 }
 
-
-
 int sus_get_content_type(const char *filepath)
 {
 	char *p;
@@ -37,32 +35,6 @@ int sus_get_content_type(const char *filepath)
 	}
 
 	p++;
-#if 0
-	if (!strcmp(p, "json")) {
-		return APPLICATION_JSON;
-	}
-	else if (!strcmp(p, "js")) {
-		return APPLICATION_JAVASCRIPT;
-	}
-	else if (!strcmp(p, "html")) {
-		return TEXT_HTML;
-	}
-	else if (!strcmp(p, "css")) {
-		return TEXT_CSS;
-	}
-	else if (!strcmp(p, "csv")) {
-		return TEXT_CSV;
-	}
-	else if (!strcmp(p, "xml")) {
-		return TEXT_XML;
-	}
-	else if (!strcmp(p, "jpeg") || !strcmp(p, "jpg")) {
-		return IMAGE_JPEG;
-	}
-	else if (!strcmp(p, "png")) {
-		return IMAGE_PNG;
-	}
-#endif
 	CONTENT_TYPE_FROM_STR(typ, p);
 	return typ;
 }

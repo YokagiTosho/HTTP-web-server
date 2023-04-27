@@ -25,6 +25,8 @@
 #include "sus_errno.h"
 #include "http.h"
 
+#define SUS_VERSION "SUS/0.2"
+
 #define PARENT_FD 1
 #define CHILD_FD  0
 
@@ -53,6 +55,13 @@
 	do { \
 		dest = malloc(strlen(src)+1); \
 		strcpy(dest, src); \
+	} while (0)
+
+#define MLCNCPY(dest, src, size) \
+	do { \
+		dest = malloc(size+1); \
+		strncpy(dest, src, size); \
+		dest[size] = 0; \
 	} while (0)
 
 #define CLOSE_INOUT_FD() \

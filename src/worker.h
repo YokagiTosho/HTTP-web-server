@@ -12,7 +12,7 @@
 #include "response.h"
 
 #include "cgi.h"
-
+#include "static.h"
 
 #define LISTEN_FD 0
 

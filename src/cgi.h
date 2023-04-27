@@ -4,12 +4,12 @@
 #include "base.h"
 
 #include "request.h"
+#include "process.h"
+#include "response.h"
 
-struct cgi_data {
-	const char *fs_path;
-	const request_t *request;
-};
+#include "filepath.h"
 
 void sus_execute_cgi(int fd, void *data);
+int sus_run_cgi(int fd, const request_t *request);
 
 #endif

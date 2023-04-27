@@ -5,183 +5,27 @@
 #define HTTP_METHODLEN 12
 #define HDRLEN 256
 
-static int sus_get_hdr_type(const char *hdrtype) 
-{
-	if (strcmp(hdrtype, "Accept-Language") == 0) {
-		return hdr_accept_language;
-	} else if (strcmp(hdrtype, "Accept-Encoding") == 0) {
-		return hdr_accept_encoding;
-	} else if (strcmp(hdrtype, "Accept") == 0) {
-		return hdr_accept;
-	} else if (strcmp(hdrtype, "Connection") == 0) {
-		return hdr_connection;
-	} else if (strcmp(hdrtype, "Cookie") == 0) {
-		return hdr_cookie;
-	} else if (strcmp(hdrtype, "Content-Length") == 0) {
-		return hdr_content_length;
-	} else if (strcmp(hdrtype, "Content-Type") == 0) {
-		return hdr_content_type;
-	} else if (strcmp(hdrtype, "Origin") == 0) {
-		return hdr_origin;
-	} else if (strcmp(hdrtype, "User-Agent") == 0) {
-		return hdr_user_agent;
-	} else if (strcmp(hdrtype, "Host") == 0) {
-		return hdr_host;
-	}
-	return hdr_undefined;
-}
-
 static int sus_get_http_method(const char *method)
 {
-	if (strcmp(method, "GET") == 0) {
+	if (!strcmp(method, "GET")) {
 		return HTTP_GET;
-	} else if (strcmp(method, "POST") == 0) {
+	} else if (!strcmp(method, "POST")) {
 		return HTTP_POST;
-	} else if (strcmp(method, "OPTIONS") == 0) {
+	} else if (!strcmp(method, "OPTIONS")) {
 		return HTTP_OPTIONS;
-	} else if (strcmp(method, "DELETE") == 0) {
+	} else if (!strcmp(method, "DELETE")) {
 		return HTTP_DELETE;
-	} else if (strcmp(method, "PUT") == 0) {
+	} else if (!strcmp(method, "PUT")) {
 		return HTTP_PUT;
-	} else if (strcmp(method, "UPDATE") == 0) {
+	} else if (!strcmp(method, "UPDATE")) {
 		return HTTP_UPDATE;
+	} else if (!strcmp(method, "HEAD")) {
+		return HTTP_HEAD;
 	}
 
 	sus_log_error(LEVEL_PANIC, "Unsupported HTTP method: %s", method);
 	sus_set_errno(HTTP_BAD_REQUEST);
 	return SUS_ERROR;
-}
-
-static int sus_get_http_version(const char *http_version)
-{
-	if (!strcmp(http_version, "HTTP/1.1")) {
-		return HTTP_VERSION1_1;
-	}
-
-	sus_log_error(LEVEL_PANIC, "HTTP version not supported: %s", http_version);
-	sus_set_errno(HTTP_VERSION_NOT_SUPPORTED);
-	return SUS_ERROR;
-}
-
-static int sus_end_of_headers(const char *s)
-{
-	return s[0] == '\r' && s[1] == '\n';
-}
-
-static int sus_get_next_header(char **req, char *hdr, int size)
-{
-	/* NOTE maybe return pointer to next chunk of request, instead of INC */
-	int i;
-	char hdr_type[64];
-	char *s = *req;
-
-	if (sus_end_of_headers(s)) {
-		/* INC pointer by 2 to go through '\r\n' */
-		*req += 2;
-		return 0;
-	}
-
-	/* going through header key and checking it for errors */
-	for (i = 0; s[i] != ':' && size; i++, size--) {
-		hdr_type[i] = s[i];
-	}
-	if (size <= 0) {
-		/* didn't find ':' */
-		sus_log_error(LEVEL_PANIC, "size <= 0: Bad request");
-		sus_set_errno(HTTP_BAD_REQUEST);
-		return SUS_ERROR;
-	}
-	hdr_type[i] = '\0';
-
-	/* skipping unwanted chars */
-	if (s[i] == ':') {
-		i++;
-	} else {
-		sus_set_errno(HTTP_BAD_REQUEST);
-		return SUS_ERROR;
-	}
-	if (s[i] == ' ') {
-		i++;
-	} else {
-		sus_set_errno(HTTP_BAD_REQUEST);
-		return SUS_ERROR;
-	}
-
-	/* header value */
-	for (; s[i] != '\r' && s[i+1] != '\n' && size; i++, size--) {
-		*hdr = s[i];
-		hdr++;
-	}
-	if (size <= 0) {
-		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
-		sus_set_errno(HTTP_URI_TOO_LONG);
-		return SUS_ERROR;
-	}
-	*hdr = '\0';
-
-	/* get rid of '\r\n' at the end of a header */
-	*req += i+2;
-
-	return sus_get_hdr_type(hdr_type);
-}
-
-static int sus_parse_request_version(char **req, char *version, int size)
-{
-	int i;
-	char *r = *req;
-	for (i = 0; r[i] != '\r' && r[i+1] != '\n' && size; i++, size--) {
-		version[i] = r[i];
-	}
-	if (size <= 0) {
-		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
-		sus_set_errno(HTTP_URI_TOO_LONG);
-		return SUS_ERROR;
-	}
-	version[i] = '\0';
-
-	*req = r+i+2;
-
-	return SUS_OK;
-}
-
-static int sus_parse_request_method(char **req, char *method, int size)
-{
-	int i;
-	char *r = *req;
-	for (i = 0; r[i] != ' ' && size; i++, size--) {
-		method[i] = r[i];
-	}
-	if (size <= 0) {
-		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
-		sus_set_errno(HTTP_URI_TOO_LONG);
-		return SUS_ERROR;
-	}
-	method[i] = '\0';
-
-	*req = r+i+1;
-
-	return SUS_OK;
-}
-
-static int sus_parse_request_uri(char **req, char *uri, int size)
-{
-	int i;
-	char *r = *req;
-
-	for (i = 0; r[i] != ' ' && size; i++, size--) {
-		uri[i] = r[i];
-	}
-
-	if (size <= 0) {
-		sus_log_error(LEVEL_PANIC, "size <= 0: request too big");
-		sus_set_errno(HTTP_URI_TOO_LONG);
-		return SUS_ERROR; /* NOTE URI too long */
-	}
-
-	uri[i] = '\0';
-
-	*req = r+i+1;
-	return 0;
 }
 
 static int sus_is_cgi(const char *uri)
@@ -205,12 +49,170 @@ static int sus_is_cgi(const char *uri)
 	return TRUE;
 }
 
+static int sus_parse_method(const char *rawreq, request_t *req)
+{
+	char *ch;
+	int len;
+
+	ch = strchr(rawreq, ' ');
+	if (!ch) {
+		sus_log_error(LEVEL_PANIC, "Failed to find \"' '\" after method in request");
+		return SUS_ERROR;
+	}
+
+	len = (int)(ch-rawreq);
+	if (!strncmp(rawreq, "GET", len)) {
+		req->method = sus_get_http_method("GET");
+	}
+	else if (!strncmp(rawreq, "POST", len)) {
+		req->method = sus_get_http_method("POST");
+	}
+	else if (!strncmp(rawreq, "OPTIONS", len)) {
+		req->method = sus_get_http_method("OPTIONS");
+	}
+	else if (!strncmp(rawreq, "DELETE", len)) {
+		req->method = sus_get_http_method("DELETE");
+	}
+	else if (!strncmp(rawreq, "PUT", len)) {
+		req->method = sus_get_http_method("PUT");
+	}
+	else if (!strncmp(rawreq, "UPDATE", len)) {
+		req->method = sus_get_http_method("UPDATE");
+	}
+	else if (!strncmp(rawreq, "HEAD", len)) {
+		req->method = sus_get_http_method("HEAD");
+	}
+	else {
+		sus_log_error(LEVEL_PANIC, "Undefined method in request");
+		return SUS_ERROR;
+	}
+
+	return len+1;
+}
+
+static int sus_parse_uri(const char *rawreq, request_t *req)
+{
+	char *space_ch, *ques_ch;
+	int uri_len, path_len, params_len;
+
+	space_ch = strchr(rawreq, ' ');
+	if (!space_ch) {
+		sus_log_error(LEVEL_PANIC, "Failed to find \"' '\" after uri in request");
+		return SUS_ERROR;
+	}
+	uri_len = (int)(space_ch-rawreq);
+
+	
+	ques_ch = memchr(rawreq, '?', uri_len);
+	if (ques_ch) {
+		req->args = 1;
+
+		ques_ch++; // get rid of '?'
+
+		params_len = (int)(space_ch-ques_ch);
+		path_len = uri_len-params_len-1;
+
+		MLCNCPY(req->path, rawreq, path_len);
+		MLCNCPY(req->params, rawreq+path_len+1, params_len);
+		MLCNCPY(req->uri, rawreq, uri_len);
+	} else {
+		path_len = uri_len;
+
+		MLCNCPY(req->path, rawreq, path_len);
+		MLCNCPY(req->uri, rawreq, uri_len);
+	}
+
+	if (!strchr(req->path, '.')) {
+		req->dir = 1;
+	}
+	if (sus_is_cgi(req->path)) {
+		req->cgi = 1;
+	}
+
+#if 0
+		printf("req->url %s\n", req->path);
+		printf("req->params %s\n", req->params);
+		printf("req->uri %s\n", req->uri);
+#endif
+
+	return (uri_len+1); // +1 to get rid of space
+}
+
+static int sus_parse_version(const char *rawreq, request_t *req)
+{
+	int len;
+
+	if (strstr(rawreq, "HTTP/0.9")) {
+		return SUS_ERROR;
+	} else if (strstr(rawreq, "HTTP/1.0")) {
+		return SUS_ERROR;
+	} else if (strstr(rawreq, "HTTP/1.1")) {
+		req->method = HTTP_VERSION1_1;
+		len = strlen("HTTP/1.1");
+	}
+
+	return (len+2);
+}
+
+static int sus_parse_next_header(const char *rawreq, request_t *req)
+{
+	char *colon, *header_end;
+	int headerlen, valuelen, value_offset;
+
+	if (*rawreq == '\r' && *(rawreq+1) == '\n') {
+		return 0;
+	}
+
+	colon = strchr(rawreq, ':');
+	if (!colon) {
+		sus_log_error(LEVEL_PANIC, "Failed to find colon in header");
+		return SUS_ERROR;
+	}
+
+	headerlen = (int)(colon-rawreq);
+
+	header_end = strstr(rawreq, "\r\n");
+	if (!header_end) {
+		sus_log_error(LEVEL_PANIC, "Failed to find end of header");
+		return SUS_ERROR;
+	}
+	valuelen = (int)(header_end-colon)-2; // -2 because of \r\n at the end
+
+	value_offset = headerlen+2; // +2 to skip ':' and ' '
+
+#define MLCCPYHDR(hdr) do { MLCNCPY(req->hdr, rawreq+value_offset, valuelen); } while(0)
+	if (!strncmp(rawreq, "Accept-Language", 15)) {
+		MLCCPYHDR(accept_language);
+	} else if (!strncmp(rawreq, "Accept-Encoding", 15)) {
+		MLCCPYHDR(accept_encoding);
+	} else if (!strncmp(rawreq, "Accept", 6)) {
+		MLCCPYHDR(accept);
+	} else if (!strncmp(rawreq, "Connection", 10)) {
+		MLCCPYHDR(connection);
+	} else if (!strncmp(rawreq, "Cookie", 6)) {
+		MLCCPYHDR(cookie);
+	} else if (!strncmp(rawreq, "Content-Length", 14)) {
+		req->content_length = strtol(rawreq+value_offset, NULL, 10);
+		if ((req->content_length == LONG_MIN 
+					|| req->content_length == LONG_MAX) && errno == ERANGE) {
+			return SUS_ERROR;
+		}
+	} else if (!strncmp(rawreq, "Content-Type", 12)) {
+		MLCCPYHDR(content_type);
+	} else if (!strncmp(rawreq, "Origin", 6)) {
+		MLCCPYHDR(origin);
+	} else if (!strncmp(rawreq, "User-Agent", 10)) {
+		MLCCPYHDR(user_agent);
+	} else if (!strncmp(rawreq, "Host", 4)) {
+		MLCCPYHDR(host);
+	}
+
+	return (int)(header_end-rawreq)+2;
+}
+
 int sus_parse_request(char *rawreq, request_t *s_req)
 {
-	/* TODO validate that server is working with valid HTTP request.
-	 * It can be easily broken with message like aaaaaa\r\n, no ':' found, thus infinite loop */
-	int ret, g;
-	char http_version[HTTP_VERSIONLEN], method[HTTP_METHODLEN], uri[URI_MAXLEN];
+	int ret;
 	char *req = rawreq;
 
 	/* skip first N '\r\n' lines if exist */
@@ -218,96 +220,48 @@ int sus_parse_request(char *rawreq, request_t *s_req)
 		req += 2;
 	}
 
-	/* METHOD */
-	ret = sus_parse_request_method(&req, method, HTTP_METHODLEN);
+	ret = sus_parse_method(req, s_req);
 	if (ret == SUS_ERROR) {
 		return SUS_ERROR;
 	}
+	req += ret;
 
-	s_req->method = sus_get_http_method(method);
-	if (s_req->method == SUS_ERROR) {
-		return SUS_ERROR;
-	}
-
-	/* URI */
-	ret = sus_parse_request_uri(&req, uri, URI_MAXLEN);
+	ret = sus_parse_uri(req, s_req);
 	if (ret == SUS_ERROR) {
 		return SUS_ERROR;
 	}
-	MLC_CPY(s_req->uri, uri);
+	req += ret;
 
-	/* VERSION */
-	ret = sus_parse_request_version(&req, http_version, HTTP_VERSIONLEN);
+	ret = sus_parse_version(req, s_req);
 	if (ret == SUS_ERROR) {
 		return SUS_ERROR;
 	}
+	req += ret;
 
-	s_req->http_version = sus_get_http_version(http_version);
-	if (s_req->http_version == SUS_ERROR) {
+	if (*req == 0) {
+		// no headers: error?
+		sus_log_error(LEVEL_PANIC, "Nothing follows after starting line in request");
 		return SUS_ERROR;
 	}
 
 	/* HEADERS */
-	g = 1;
-	while (g) {
-		char hdr_value[HDRLEN];
-		ret = sus_get_next_header(&req, hdr_value, HDRLEN);
-		switch (ret) {
-			case SUS_ERROR:
-				/* TODO error */
-				sus_log_error(LEVEL_PANIC, "Failed \"get_next_header()\"");
-				return SUS_ERROR;
-				break;
-			case 0:
-				g = 0;
-				break;
-			case hdr_accept_language:
-				MLC_CPY(s_req->accept_language, hdr_value);
-				break;
-			case hdr_accept_encoding:
-				MLC_CPY(s_req->accept_encoding, hdr_value);
-				break;
-			case hdr_accept:
-				MLC_CPY(s_req->accept, hdr_value);
-				break;
-			case hdr_connection:
-				MLC_CPY(s_req->connection, hdr_value);
-				break;
-			case hdr_cookie:
-				MLC_CPY(s_req->cookie, hdr_value);
-				break;
-			case hdr_content_length:
-				errno = 0;
-				CONVERT_TO_INT(s_req->content_length, hdr_value);
-				break;
-			case hdr_content_type:
-				MLC_CPY(s_req->content_type, hdr_value);
-				break;
-			case hdr_origin:
-				MLC_CPY(s_req->origin, hdr_value);
-				break;
-			case hdr_user_agent:
-				MLC_CPY(s_req->user_agent, hdr_value);
-				break;
-			case hdr_host:
-				MLC_CPY(s_req->host, hdr_value);
-				break;
+	for ( ;; ) {
+		ret = sus_parse_next_header(req, s_req);
+		if (ret == SUS_ERROR) {
+			return SUS_ERROR;
+		} else if (ret == 0) {
+			break;
+		}
+
+		req += ret;
+
+		if (*req == 0) {
+			break;
 		}
 	}
 
 	if (s_req->content_length > 0) {
 		MLC_CPY(s_req->request_body, req);
-	}
-
-	// NOTE extra fields
-	if (!strchr(s_req->uri, '.')) {
-		s_req->dir = 1;
-	}
-	if (strchr(s_req->uri, '?')) {
-		s_req->args = 1;
-	}
-	if (sus_is_cgi(s_req->uri)) {
-		s_req->cgi = 1;
 	}
 
 	return SUS_OK;
