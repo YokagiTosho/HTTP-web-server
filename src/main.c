@@ -233,19 +233,6 @@ static void sus_init_heap()
 
 int main(int argc, char **argv)
 {
-#if 0
-	request_t req;
-	memset(&req, 0, sizeof(req));
-
-	int q = sus_parse_request("GET /testurlhere/img.jpeg?param1=value1&param2=value2 HTTP/1.1\r\nAccept: some-shit;q=1512\r\nConnection: Keep-Alive\r\nContent-Length: 2345\r\nHost: 127.0.0.1\r\n", &req);
-	if (q == SUS_ERROR) {
-		puts("ret == SUS_ERROR");
-		return 1;
-	}
-	printf("filepath: %s\n", sus_get_fspath(&req));
-	return 0;
-#endif
-
 	int ret;
 
 	sus_init_heap();
@@ -254,7 +241,7 @@ int main(int argc, char **argv)
 
 	sus_write_master_pid();
 
-	close(STDIN_FILENO);
+	sus_redir_stream("/dev/null", STDIN_FILENO);
 	sus_redir_stream("error.log", STDERR_FILENO);
 #ifndef DEBUG
 	sus_redir_stream("access.log", STDOUT_FILENO);

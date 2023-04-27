@@ -6,13 +6,21 @@ void sus_execute_cgi(int fd, void *data)
 {
 	char str_int[32];
 	const char *cgi_path;
+	int ret;
 
 	const request_t *request = (request_t*)data;
 
 	cgi_path = sus_get_fspath();
-	printf("cgi_path: %s\n", cgi_path);
 
-	sprintf(str_int, "%d", request->content_length);
+#ifdef DEBUG
+	fprintf(stdout, "cgi_path: %s\n", cgi_path);
+#endif
+
+	ret = snprintf(str_int, 32, "%d", request->content_length);
+	if (ret >= 32 || ret < 0) {
+		sus_log_error(LEVEL_PANIC, "Failed \"snprintf()\"");
+		exit(1);
+	}
 
 #if !defined (USE_setenv)
 
@@ -20,17 +28,18 @@ void sus_execute_cgi(int fd, void *data)
 	fprintf(stdout, "!defined (USE_setenv)\n");
 #endif
 
-	const char *envs[30];
+	char *envs[30];
 	char *str;
 	int i = 0, size;
 
-#define SET_ENV(KEY, VAL, PRED) \
+#define SET_ENV(KEY, VAL, PREDICATE) \
 	do { \
-		if (PRED) { \
+		if (PREDICATE) { \
 			size = strlen(KEY)+strlen(VAL)+2; \
 			str = malloc(size); \
 			if (!str) { sus_log_error(LEVEL_PANIC, "Failed to alloc mem for str"); exit(1); } \
-			snprintf(str, size, "%s=%s", KEY, VAL); \
+			ret = snprintf(str, size, "%s=%s", KEY, VAL); \
+			if (ret >= size-1 || ret < 0) { sus_log_error(LEVEL_PANIC, "Failed \"snprintf()\" in macro"); exit(1); } \
 			envs[i++] = str; \
 			str = NULL; \
 		} \
@@ -156,5 +165,3 @@ error:
 	sus_fre_res(&response);
 	return SUS_ERROR;
 }
-
-

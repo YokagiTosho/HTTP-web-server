@@ -1,10 +1,5 @@
 #include "request.h"
 
-#define URI_MAXLEN 257
-#define HTTP_VERSIONLEN 10
-#define HTTP_METHODLEN 12
-#define HDRLEN 256
-
 static int sus_get_http_method(const char *method)
 {
 	if (!strcmp(method, "GET")) {
@@ -130,9 +125,11 @@ static int sus_parse_uri(const char *rawreq, request_t *req)
 	}
 
 #if 0
-		printf("req->url %s\n", req->path);
-		printf("req->params %s\n", req->params);
-		printf("req->uri %s\n", req->uri);
+#ifdef DEBUG
+		fprintf(stdout, "req->url %s\n", req->path);
+		fprintf(stdout, "req->params %s\n", req->params);
+		fprintf(stdout, "req->uri %s\n", req->uri);
+#endif
 #endif
 
 	return (uri_len+1); // +1 to get rid of space

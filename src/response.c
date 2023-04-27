@@ -344,6 +344,15 @@ static int sus_response_from_cgi(int fd, response_t *response)
 	int ret, keylen, thereis_body, buflen_rem;
 	char lbuf[CGI_LINEBUF_LEN], *s;
 
+	// saving stdin that refers to /dev/null
+	int saved_stdin = dup(STDIN_FILENO);
+	if (saved_stdin == -1) {
+		sus_log_error(LEVEL_PANIC, "Failed \"dup2()\": %s", strerror(errno));
+		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
+		return SUS_ERROR;
+	}
+
+	// making CGI fd refer to STDIN so can use fgets to simplify parsing
 	if (dup2(fd, STDIN_FILENO) == SUS_ERROR) {
 		sus_log_error(LEVEL_PANIC, "Failed \"dup2()\": %s", strerror(errno));
 		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
@@ -355,6 +364,7 @@ static int sus_response_from_cgi(int fd, response_t *response)
 		if (!s) {
 			goto error;
 		}
+
 		if (lbuf[0] == '\n') {
 			thereis_body = 1;
 			break;
@@ -369,7 +379,7 @@ static int sus_response_from_cgi(int fd, response_t *response)
 			goto error;
 		}
 		/* determine length of key */
-		keylen = s-lbuf;
+		keylen = (int)(s-lbuf);
 
 		/* Advance s to point to start of the value */
 		s++;
@@ -413,9 +423,13 @@ static int sus_response_from_cgi(int fd, response_t *response)
 	/* read into global buf memory */
 	if (thereis_body) {
 		if (response->content_length > BUFLEN) {
+			/* known content_length is bigger than BUFLEN, make response chunked
+			 * so it will be send chunk by chunk in send_response function */
 			response->chunked = 1;
 			response->chunking_handle = fd;
-		} else if (response->content_length > 0) {
+		}
+		else if (response->content_length > 0) {
+			/* content_length is less than BUFLEN so can store: just read it */
 			ret = read(fd, buf, BUFLEN); 
 			switch (ret) {
 				case -1:
@@ -423,13 +437,18 @@ static int sus_response_from_cgi(int fd, response_t *response)
 					sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 					goto error;
 				case 0:
-					/* NOTE no body, but response->content_length > 0 */
+					/* no body, but response->content_length > 0 */
 					sus_log_error(LEVEL_PANIC, "No body, but response->content_length > 0");
 					sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 					goto error;
+				default:
+					buf[ret] = '\0';
+					response->body = buf;
+					break;
 			}
-		} else {
-			/* TODO read here CGI body */
+		}
+		else {
+			/* read here CGI body line by line */
 			buflen_rem = BUFLEN;
 
 			for (s = buf, ret = 0; fgets(s, buflen_rem, stdin) && buflen_rem > 0; ) {
@@ -443,9 +462,10 @@ static int sus_response_from_cgi(int fd, response_t *response)
 				buflen_rem -= ret;
 			}
 			response->body = buf;
-			*(s-1) = '\0';
+			*s = '\0';
 		}
-	} else {
+	}
+	else {
 		/* CGI hasn't produced content */
 		sus_log_error(LEVEL_PANIC, "CGI didn't produce content");
 		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
@@ -453,9 +473,15 @@ static int sus_response_from_cgi(int fd, response_t *response)
 	}
 
 	close(STDIN_FILENO);
+
+	dup2(saved_stdin, STDIN_FILENO);
+	close(saved_stdin);
 	return (SUS_OK);
 error:
 	close(STDIN_FILENO);
+
+	dup2(saved_stdin, STDIN_FILENO);
+	close(saved_stdin);
 	return (SUS_ERROR);
 }
 
@@ -485,6 +511,7 @@ int sus_response_from_fd(int fd, response_t *response)
 		sus_log_error(LEVEL_PANIC, "Undefined S_IS* in \"response_from_fd()\"");
 		return SUS_ERROR;
 	}
+
 	return SUS_OK;
 }
 
@@ -511,5 +538,5 @@ void sus_fre_res(response_t *response)
 	response->body = NULL;
 	response->connection = NULL;
 
-	response->chunking_handle = -1;
+	response->chunking_handle = INVALID_SOCKET;
 }

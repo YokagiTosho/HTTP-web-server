@@ -58,6 +58,7 @@ static int sus_compress_gzip(char *dat, int *dat_size)
 	if ((wstatus = sus_wait_process(&process)) == SUS_ERROR) {
 		return SUS_ERROR;
 	}
+
 	if (WIFEXITED(wstatus)) {
 		ret = WEXITSTATUS(wstatus);
 		if (ret != 0) {
@@ -112,6 +113,7 @@ static int sus_compress_gzip(char *dat, int *dat_size)
 		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
 		return SUS_ERROR;
 	}
+
 	return SUS_OK;
 }
 
