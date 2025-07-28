@@ -2,8 +2,8 @@
 
 #include "config.h"
 #include "bridge.h"
-#include "stderr.h"
 #include "worker.h"
+#include "utils.h"
 
 #include "log.h"
 
@@ -203,9 +203,11 @@ static void sus_parse_args(int argc, char **argv)
 		}
 		if (!strcmp("stop", argv[1])) {
 			kill(master_pid, SIGINT);
-		} else if (!strcmp("restart", argv[1])) {
+		}
+		else if (!strcmp("restart", argv[1])) {
 			kill(master_pid, SIGHUP);
-		} else {
+		}
+		else {
 #ifdef DEBUG
 			fprintf(stderr, "Unrecognized option: %s\n", argv[1]);
 #endif
@@ -215,27 +217,11 @@ static void sus_parse_args(int argc, char **argv)
 	}
 }
 
-static void sus_init_heap()
-{
-#if 0
-#define HEAP_SIZE 1024*1024*8
-	void *ptr = malloc(HEAP_SIZE);
-	if (!ptr) {
-		sus_log_error(LEVEL_PANIC, "Could not allocate memory");
-		exit(1);
-	}
-	free(ptr);
-	ptr = NULL;
-#endif
-}
-
 #include "request.h"
 
 int main(int argc, char **argv)
 {
 	int ret;
-
-	sus_init_heap();
 
 	sus_parse_args(argc, argv);
 
@@ -247,10 +233,7 @@ int main(int argc, char **argv)
 	sus_redir_stream("access.log", STDOUT_FILENO);
 #endif
 
-	/* TODO remove restart label and make 'sus_parse_config' very first call.
-	 * In signal handling just call 'sus_parse_config' again and goto 'sus_init_workers'
-	 * This is because redirection of streams happens before config parsing, it should not be this way
-	 * */
+
 restart:
 	if (sus_parse_config() == SUS_ERROR) {
 		exit(1);

@@ -5,7 +5,6 @@
 
 #include "server.h"
 #include "io.h"
-#include "BW_protocol.h"
 #include "process.h"
 
 #include "request.h"
@@ -13,8 +12,6 @@
 
 #include "cgi.h"
 #include "static.h"
-
-#define LISTEN_FD 0
 
 #define WORKER_BUFSIZE 4096
 

@@ -5,5 +5,6 @@ run
 *.py
 examples/
 html_templates/
+*~
 
 webserver

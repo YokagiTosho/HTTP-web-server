@@ -49,6 +49,8 @@
 #define TRUE 1
 #define FALSE 0
 
+#define LISTEN_FD 0
+
 #define DEBUG // for printf to stdout
 
 #define MLC_CPY(dest, src) \

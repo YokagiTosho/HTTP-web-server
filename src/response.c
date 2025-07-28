@@ -129,7 +129,7 @@ static int sus_response_set_raw_body(struct raw_response *raw, const response_t 
 	return SUS_OK;
 }
 
-static int sus_response_to_raw(struct raw_response *raw, const response_t *response)
+int sus_response_to_raw(struct raw_response *raw, const response_t *response)
 {
 	/* Used to make raw bytes from response to send over network */
 

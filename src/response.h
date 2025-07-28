@@ -5,8 +5,8 @@
 
 #include "http.h"
 #include "compress.h"
-#include "date.h"
 #include "errors_html.h"
+#include "utils.h"
 
 typedef struct {
 	int http_version;
@@ -42,7 +42,5 @@ int sus_send_response(int fd, response_t *request);
 int sus_send_response_error(int fd, int status);
 
 void sus_fre_res(response_t *response);
-
-//int sus_response_from_cgi(int fd, response_t *response);
 
 #endif

@@ -1,7 +1,5 @@
 #include "bridge.h"
 
-#include "BW_protocol.h"
-
 process_t bridge; // extern
 
 static int SIGINT_RECV, SIGHUP_RECV, SIGCHLD_RECV;

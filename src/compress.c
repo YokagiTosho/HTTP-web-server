@@ -46,13 +46,6 @@ static int sus_compress_gzip(char *dat, int *dat_size)
 		return SUS_ERROR;
 	}
 
-#if 0
-	if (close(process.channel[0]) == -1) {
-		sus_log_error(LEVEL_PANIC, "Failed \"close()\": %s", strerror(errno));
-		sus_set_errno(HTTP_INTERNAL_SERVER_ERROR);
-		return SUS_ERROR;
-	}
-#endif
 	sus_close_process(&process);
 
 	if ((wstatus = sus_wait_process(&process)) == SUS_ERROR) {

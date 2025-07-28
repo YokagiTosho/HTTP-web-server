@@ -1,7 +1,6 @@
 Addr 127.0.0.1
 Port 8000
 
-#MaxCon 128
 Workers 1
 PollTimeout 10
 

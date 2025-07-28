@@ -95,7 +95,9 @@ static int sus_process_bridge_data(int fd)
 			close(ch.socket);
 			//return SUS_ERROR;
 		}
+#ifdef DEBUG
 		fprintf(stdout, "Accepted %d socket\n", ch.socket);
+#endif
 	}
 	return SUS_OK;
 }
@@ -142,7 +144,7 @@ static int sus_kgo_response(int fd, const request_t *request)
 		ret = sus_run_static(fd, request);
 	}
 
-	if (ret == SUS_ERROR && sus_errno != 0) {
+	if (ret == SUS_ERROR && sus_errno != SUS_OK) {
 		sus_send_response_error(fd, sus_errno);
 		return SUS_ERROR;
 	}
@@ -199,6 +201,7 @@ static int sus_error_callback(int fd)
 	return SUS_OK;
 }
 
+/* typedefs for callbacks */
 typedef int (*PFD_ERROR)(int fd);
 typedef int (*PFD_SUCCESS)(int fd, char *buf, int rc);
 typedef int (*PFD_DISCONNECTED)(int *fd);
@@ -215,7 +218,7 @@ static void sus_cycle_cons(
 	client_disconnected = 0;
 	for (i = LISTEN_FD+1; i < n; i++) {
 		if (fds[i].revents & POLLIN) {
-			/* NOTE can read fd and handle it */
+			/* can read fd and handle it */
 			rc = sus_read_clientfd(fds[i].fd, buf, WORKER_BUFSIZE);
 
 			switch (rc) {
