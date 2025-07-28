@@ -3,8 +3,6 @@ run
 *.sh
 *.txt
 *.py
-examples/
-html_templates/
 *~
 
 webserver
